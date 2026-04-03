@@ -315,7 +315,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: `Error ${res.status}` }));
-          throw new Error(err.error ?? `Error ${res.status}`);
+          if (err.error === "TOKEN_INSUFFICIENT") {
+            throw new Error("TOKEN_INSUFFICIENT");
+          }
+          throw new Error(err.message ?? err.error ?? `Error ${res.status}`);
         }
 
         const data = await res.json();

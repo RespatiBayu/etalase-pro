@@ -11,6 +11,7 @@ import {
   Copy,
   Check,
   Bot,
+  Zap,
 } from "lucide-react";
 import { useProject } from "@/context/ProjectContext";
 import { ProgressOverlay } from "@/components/ui/ProgressOverlay";
@@ -53,7 +54,11 @@ async function downloadBlob(blob: Blob, filename: string) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Step5Results() {
+interface Step5ResultsProps {
+  onTokensUpdated?: () => void;
+}
+
+export function Step5Results({ onTokensUpdated }: Step5ResultsProps) {
   const {
     isGenerating,
     progress,
@@ -226,35 +231,71 @@ export function Step5Results() {
       {/* ── Error ── */}
       {!isGenerating && generateError && (
         <div className="w-full max-w-md mx-auto py-10 px-6 text-center animate-in fade-in zoom-in-95 duration-300">
-          <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-rose-100 animate-bounce">
-            <AlertTriangle className="text-rose-500" size={40} />
-          </div>
-          <h3 className="text-xl font-black text-rose-900 mb-2 uppercase tracking-tight">
-            Terjadi Kesalahan
-          </h3>
-          <p className="text-slate-500 text-sm mb-8 leading-relaxed px-4">
-            {generateError}
-          </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => {
-                clearGenerateError();
-                setStep(3);
-              }}
-              className="px-6 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors flex items-center gap-2"
-            >
-              <Settings size={14} /> Cek Settings
-            </button>
-            <button
-              onClick={() => {
-                clearGenerateError();
-                handleGenerate();
-              }}
-              className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-rose-500 to-orange-500 text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-rose-200 flex items-center gap-2"
-            >
-              <RotateCcw size={14} /> Coba Lagi
-            </button>
-          </div>
+          {generateError === "TOKEN_INSUFFICIENT" ? (
+            <>
+              <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-orange-100">
+                <Zap className="text-orange-500" size={40} />
+              </div>
+              <h3 className="text-xl font-black text-orange-900 mb-2 uppercase tracking-tight">
+                Token Habis
+              </h3>
+              <p className="text-slate-500 text-sm mb-8 leading-relaxed px-4">
+                Token kamu tidak cukup untuk generate gambar. Beli token terlebih dahulu.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    clearGenerateError();
+                    setStep(4);
+                  }}
+                  className="px-6 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                >
+                  Kembali
+                </button>
+                <button
+                  onClick={() => {
+                    clearGenerateError();
+                    onTokensUpdated?.();
+                  }}
+                  className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-orange-200 flex items-center gap-2"
+                >
+                  <Zap size={14} /> Beli Token
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-rose-100 animate-bounce">
+                <AlertTriangle className="text-rose-500" size={40} />
+              </div>
+              <h3 className="text-xl font-black text-rose-900 mb-2 uppercase tracking-tight">
+                Terjadi Kesalahan
+              </h3>
+              <p className="text-slate-500 text-sm mb-8 leading-relaxed px-4">
+                {generateError}
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    clearGenerateError();
+                    setStep(3);
+                  }}
+                  className="px-6 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors flex items-center gap-2"
+                >
+                  <Settings size={14} /> Cek Settings
+                </button>
+                <button
+                  onClick={() => {
+                    clearGenerateError();
+                    handleGenerate();
+                  }}
+                  className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-rose-500 to-orange-500 text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-rose-200 flex items-center gap-2"
+                >
+                  <RotateCcw size={14} /> Coba Lagi
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

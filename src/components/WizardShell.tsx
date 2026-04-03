@@ -1,8 +1,10 @@
 "use client";
 
-import { ShoppingBag, RotateCcw, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ShoppingBag, RotateCcw, ChevronLeft, ChevronRight, LogOut, Zap } from "lucide-react";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { WarningModal } from "@/components/ui/WarningModal";
+import { TokenModal } from "@/components/ui/TokenModal";
 import { Step1Upload } from "@/components/steps/Step1Upload";
 import { Step2Style } from "@/components/steps/Step2Style";
 import { Step3Settings } from "@/components/steps/Step3Settings";
@@ -13,6 +15,24 @@ import { createClient } from "@/lib/supabase/client";
 
 export function WizardShell() {
   const supabase = createClient();
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+  const [userEmail, setUserEmail] = useState("");
+
+  // Fetch token balance + user email on mount
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) setUserEmail(user.email);
+    });
+    refreshTokenBalance();
+  }, []);
+
+  const refreshTokenBalance = () => {
+    fetch("/api/tokens/balance")
+      .then((r) => r.json())
+      .then((data) => setTokenBalance(data.tokens ?? 0))
+      .catch(() => {});
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -54,6 +74,16 @@ export function WizardShell() {
         onCancel={() => setWarningModal({ show: false, mode: "" })}
       />
 
+      {showTokenModal && (
+        <TokenModal
+          userEmail={userEmail}
+          onClose={() => {
+            setShowTokenModal(false);
+            refreshTokenBalance();
+          }}
+        />
+      )}
+
       <div className="max-w-6xl mx-auto bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-2xl shadow-orange-100/50 overflow-hidden min-h-[90vh] md:min-h-[850px] flex flex-col border border-orange-100 relative">
         {/* Header */}
         <div className="p-4 md:p-6 border-b border-orange-100/50 bg-white sticky top-0 z-20">
@@ -71,7 +101,22 @@ export function WizardShell() {
                 </p>
               </div>
             </div>
+
             <div className="flex items-center gap-1 md:gap-2">
+              {/* Token balance badge */}
+              <button
+                onClick={() => setShowTokenModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full border-2 border-orange-100 bg-orange-50 hover:border-orange-300 transition-all"
+              >
+                <Zap size={13} className="text-orange-400" />
+                <span className="text-[11px] font-black text-orange-600">
+                  {tokenBalance === null ? "..." : tokenBalance}
+                </span>
+                <span className="text-[9px] font-bold text-orange-400 hidden sm:inline">
+                  token
+                </span>
+              </button>
+
               <button
                 onClick={handleNewProjectClick}
                 className="text-[10px] md:text-sm font-bold flex items-center gap-1 md:gap-2 px-3 md:py-2 rounded-full transition-all text-orange-400 hover:text-rose-500 hover:bg-rose-50"
@@ -79,6 +124,7 @@ export function WizardShell() {
                 <RotateCcw size={14} />
                 <span className="hidden xs:inline">Mulai Ulang</span>
               </button>
+
               <button
                 onClick={handleLogout}
                 title="Keluar"
@@ -97,7 +143,7 @@ export function WizardShell() {
           {step === 2 && <Step2Style />}
           {step === 3 && <Step3Settings />}
           {step === 4 && <Step4Preview />}
-          {step === 5 && <Step5Results />}
+          {step === 5 && <Step5Results onTokensUpdated={refreshTokenBalance} />}
         </div>
 
         {/* Footer nav */}
