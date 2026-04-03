@@ -58,6 +58,29 @@ export interface Database {
           created_at?: string;
         };
       };
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          role: string;
+          is_approved: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          role?: string;
+          is_approved?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          role?: string;
+          is_approved?: boolean;
+          created_at?: string;
+        };
+      };
       generated_images: {
         Row: {
           id: string;
