@@ -25,8 +25,26 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session — keeps auth token alive
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/auth");
+
+  // Redirect unauthenticated users to /login
+  if (!user && !isAuthRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect authenticated users away from /login
+  if (user && pathname === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
 
   return supabaseResponse;
 }

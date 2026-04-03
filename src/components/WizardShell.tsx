@@ -1,6 +1,6 @@
 "use client";
 
-import { ShoppingBag, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShoppingBag, RotateCcw, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { WarningModal } from "@/components/ui/WarningModal";
 import { Step1Upload } from "@/components/steps/Step1Upload";
@@ -9,8 +9,16 @@ import { Step3Settings } from "@/components/steps/Step3Settings";
 import { Step4Preview } from "@/components/steps/Step4Preview";
 import { Step5Results } from "@/components/steps/Step5Results";
 import { useProject } from "@/context/ProjectContext";
+import { createClient } from "@/lib/supabase/client";
 
 export function WizardShell() {
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  };
+
   const {
     step,
     nextStep,
@@ -63,13 +71,22 @@ export function WizardShell() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleNewProjectClick}
-              className="text-[10px] md:text-sm font-bold flex items-center gap-1 md:gap-2 px-3 md:py-2 rounded-full transition-all text-orange-400 hover:text-rose-500 hover:bg-rose-50"
-            >
-              <RotateCcw size={14} />
-              <span className="hidden xs:inline">Mulai Ulang</span>
-            </button>
+            <div className="flex items-center gap-1 md:gap-2">
+              <button
+                onClick={handleNewProjectClick}
+                className="text-[10px] md:text-sm font-bold flex items-center gap-1 md:gap-2 px-3 md:py-2 rounded-full transition-all text-orange-400 hover:text-rose-500 hover:bg-rose-50"
+              >
+                <RotateCcw size={14} />
+                <span className="hidden xs:inline">Mulai Ulang</span>
+              </button>
+              <button
+                onClick={handleLogout}
+                title="Keluar"
+                className="text-[10px] md:text-sm font-bold flex items-center gap-1 px-3 md:py-2 rounded-full transition-all text-slate-400 hover:text-rose-500 hover:bg-rose-50"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
           </div>
           <StepIndicator currentStep={step} />
         </div>
