@@ -30,16 +30,16 @@
 - [x] Git commit
 
 ## Phase 4: Core UI Components
-- [ ] StepIndicator.tsx
-- [ ] CategorySelector.tsx
-- [ ] ImageUploader.tsx
-- [ ] StyleCard.tsx
-- [ ] ToggleCard.tsx
-- [ ] WarningModal.tsx
-- [ ] SubWindow.tsx (sliding modal)
-- [ ] ProgressOverlay.tsx
-- [ ] Toast.tsx (replacement for alert())
-- [ ] Git commit
+- [x] StepIndicator.tsx
+- [x] CategorySelector.tsx
+- [x] ImageUploader.tsx
+- [x] StyleCard.tsx
+- [x] ToggleCard.tsx
+- [x] WarningModal.tsx
+- [x] SubWindow.tsx (sliding modal)
+- [x] ProgressOverlay.tsx
+- [x] Toast.tsx (replacement for alert())
+- [x] Git commit
 
 ## Phase 5: Step Pages 1-3
 - [ ] ProjectContext.tsx (React Context for all state)
@@ -90,6 +90,6 @@
 - [ ] Final verification on production URL
 
 ## Status
-- **Current Phase**: Phase 3 complete
+- **Current Phase**: Phase 4 complete
 - **Blockers**: None
 - **Notes**: —

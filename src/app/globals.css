@@ -6,3 +6,32 @@ body {
   background-color: #FFF8F0;
   color: #1a1a1a;
 }
+
+/* Scanning animation for progress overlay */
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+.animate-scan {
+  animation: scan 2s linear infinite;
+}
+
+/* Blink animation */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-blink {
+  animation: blink 1.5s infinite;
+}
+
+/* Hide scrollbar */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Sharp image rendering */
+.image-render-sharp {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  -webkit-font-smoothing: antialiased;
+}
