@@ -53,14 +53,13 @@
 - [x] Git commit
 
 ## Phase 6: API Routes
-- [ ] src/lib/gemini.ts (shared Gemini API client)
-- [ ] src/lib/prompt-builder.ts (buildAiPrompt logic)
-- [ ] POST /api/generate-image/route.ts
-- [ ] POST /api/generate-text/route.ts
-- [ ] POST /api/generate-caption/route.ts
-- [ ] Verify API key is server-side only
-- [ ] Test with curl or Thunder Client
-- [ ] Git commit
+- [x] src/lib/gemini.ts (shared Gemini API client)
+- [x] src/lib/prompt-builder.ts (buildAiPrompt logic)
+- [x] POST /api/generate-image/route.ts
+- [x] POST /api/generate-text/route.ts
+- [x] POST /api/generate-caption/route.ts
+- [x] Verify API key is server-side only
+- [x] Git commit
 
 ## Phase 7: Step Pages 4-5
 - [ ] Step4Preview.tsx (prompt preview, copy, external links, generate button)
@@ -90,6 +89,6 @@
 - [ ] Final verification on production URL
 
 ## Status
-- **Current Phase**: Phase 5 complete
+- **Current Phase**: Phase 6 complete
 - **Blockers**: None
 - **Notes**: —
