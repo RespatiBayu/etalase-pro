@@ -37,12 +37,19 @@ export default function LoginPage() {
 
   // ── Check if user is approved in profiles table ──
   const checkApproval = async (userId: string): Promise<boolean> => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("is_approved")
       .eq("id", userId)
       .returns<{ is_approved: boolean }[]>()
       .single();
+
+    if (error) {
+      // Table doesn't exist yet or schema error — treat as not approved
+      console.error("Profile check error:", error.message);
+      throw new Error("Sistem sedang dalam pemeliharaan. Hubungi administrator.");
+    }
+
     return (data as { is_approved: boolean } | null)?.is_approved === true;
   };
 
