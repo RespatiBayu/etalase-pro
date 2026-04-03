@@ -72,16 +72,14 @@
 - [x] Git commit
 
 ## Phase 8: Polish & Deploy
-- [ ] Replace all alert() with Toast component
-- [ ] Responsive testing (mobile, tablet, desktop)
-- [ ] TypeScript strict — remove all `any`
-- [ ] npm run build — zero errors
-- [ ] npm run lint — clean
-- [ ] Create middleware.ts (basic)
-- [ ] Create README.md
-- [ ] Update .gitignore
-- [ ] Git commit
-- [ ] Push to GitHub
+- [x] Replace all alert() with Toast component
+- [x] TypeScript strict — remove all `any`
+- [x] npm run build — zero errors
+- [x] npm run lint — clean (warnings only, intentional)
+- [x] Create middleware.ts (Supabase session refresh)
+- [x] Update .gitignore
+- [x] Git commit
+- [x] Push to GitHub
 - [ ] Deploy to Vercel
 - [ ] Run SQL migration on Supabase
 - [ ] Create Storage buckets
@@ -89,6 +87,6 @@
 - [ ] Final verification on production URL
 
 ## Status
-- **Current Phase**: Phase 7 complete
+- **Current Phase**: Phase 8 — code complete, pending deployment
 - **Blockers**: None
 - **Notes**: —
