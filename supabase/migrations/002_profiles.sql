@@ -39,39 +39,42 @@ DO $$
 DECLARE
   v_admin_id uuid;
 BEGIN
-  -- Insert into auth.users (only if not exists)
-  INSERT INTO auth.users (
-    id,
-    instance_id,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at,
-    aud,
-    role
-  )
-  VALUES (
-    gen_random_uuid(),
-    '00000000-0000-0000-0000-000000000000',
-    'etalasepro.admin@gmail.com',
-    crypt('Bismillah100%', gen_salt('bf')),
-    now(),
-    '{"provider":"email","providers":["email"]}',
-    '{}',
-    now(),
-    now(),
-    'authenticated',
-    'authenticated'
-  )
-  ON CONFLICT (email) DO NOTHING;
-
-  -- Get the admin's id (whether just inserted or already existed)
+  -- Check if admin already exists
   SELECT id INTO v_admin_id
   FROM auth.users
   WHERE email = 'etalasepro.admin@gmail.com';
+
+  -- Only insert if not exists
+  IF v_admin_id IS NULL THEN
+    v_admin_id := gen_random_uuid();
+
+    INSERT INTO auth.users (
+      id,
+      instance_id,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      raw_app_meta_data,
+      raw_user_meta_data,
+      created_at,
+      updated_at,
+      aud,
+      role
+    )
+    VALUES (
+      v_admin_id,
+      '00000000-0000-0000-0000-000000000000',
+      'etalasepro.admin@gmail.com',
+      crypt('Bismillah100%', gen_salt('bf')),
+      now(),
+      '{"provider":"email","providers":["email"]}',
+      '{}',
+      now(),
+      now(),
+      'authenticated',
+      'authenticated'
+    );
+  END IF;
 
   -- Insert/update profile as admin + approved
   INSERT INTO public.profiles (id, email, role, is_approved)
