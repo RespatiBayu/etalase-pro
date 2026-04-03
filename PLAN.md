@@ -62,14 +62,14 @@
 - [x] Git commit
 
 ## Phase 7: Step Pages 4-5
-- [ ] Step4Preview.tsx (prompt preview, copy, external links, generate button)
-- [ ] Step5Results.tsx (loading, error, success states)
-- [ ] Download logic with canvas logo merge
-- [ ] Regenerate per-image
-- [ ] Marketplace caption section
-- [ ] iOS share fallback
-- [ ] Connect to API routes
-- [ ] Git commit
+- [x] Step4Preview.tsx (prompt preview, copy, external links, generate button)
+- [x] Step5Results.tsx (loading, error, success states)
+- [x] Download logic with canvas logo merge
+- [x] Regenerate per-image
+- [x] Marketplace caption section
+- [x] iOS share fallback
+- [x] Connect to API routes
+- [x] Git commit
 
 ## Phase 8: Polish & Deploy
 - [ ] Replace all alert() with Toast component
@@ -89,6 +89,6 @@
 - [ ] Final verification on production URL
 
 ## Status
-- **Current Phase**: Phase 6 complete
+- **Current Phase**: Phase 7 complete
 - **Blockers**: None
 - **Notes**: —
