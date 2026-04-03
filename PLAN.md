@@ -22,12 +22,12 @@
 - [x] Git commit
 
 ## Phase 3: Config & Constants Migration
-- [ ] src/config/categories.ts — 8 categories with icons, colors, prompts
-- [ ] src/config/styles.ts — fashion styles, non-fashion presets (30 total), poster styles
-- [ ] src/config/options.ts — fonts, visual effects, CTA, logo positions, ratios
-- [ ] src/types/index.ts — all TypeScript interfaces
-- [ ] Verify all data matches original app exactly
-- [ ] Git commit
+- [x] src/config/categories.ts — 8 categories with icons, colors, prompts
+- [x] src/config/styles.ts — fashion styles, non-fashion presets (30 total), poster styles
+- [x] src/config/options.ts — fonts, visual effects, CTA, logo positions, ratios
+- [x] src/types/index.ts — all TypeScript interfaces
+- [x] Verify all data matches original app exactly
+- [x] Git commit
 
 ## Phase 4: Core UI Components
 - [ ] StepIndicator.tsx
@@ -90,6 +90,6 @@
 - [ ] Final verification on production URL
 
 ## Status
-- **Current Phase**: Phase 2 complete
+- **Current Phase**: Phase 3 complete
 - **Blockers**: None
 - **Notes**: —
