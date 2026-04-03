@@ -104,6 +104,15 @@ interface ProjectContextValue {
   setLogoImage: (dataUrl: string) => void;
   clearLogoImage: () => void;
 
+  // Step 4-5 — Generation
+  isGenerating: boolean;
+  progress: number;
+  generateError: string | null;
+  regeneratingIndices: Record<number, boolean>;
+  handleGenerate: () => Promise<void>;
+  handleRegenerateSingle: (index: number) => Promise<void>;
+  clearGenerateError: () => void;
+
   // Step 5
   generatedResults: string[];
   setGeneratedResults: (r: string[]) => void;
@@ -166,6 +175,12 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(INITIAL_SETTINGS);
   const [logoImage, setLogoImageState] = useState<string | null>(null);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
+
+  // Step 4-5 — Generation
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [regeneratingIndices, setRegeneratingIndices] = useState<Record<number, boolean>>({});
 
   // Step 5
   const [generatedResults, setGeneratedResults] = useState<string[]>([]);
@@ -240,6 +255,123 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  // ── Generation ──
+  const clearGenerateError = useCallback(() => setGenerateError(null), []);
+
+  const buildPayload = useCallback(
+    () => ({
+      base64Image: base64Image ?? "",
+      base64Image2: base64Image2 ?? undefined,
+      referenceBase64:
+        generateTab === "Custom" && referenceBase64 ? referenceBase64 : undefined,
+      settings,
+      category: selectedCategory!,
+      styleConfig: {
+        selectedStyle,
+        selectedPresetId,
+        generateTab,
+        gender: selectedGender,
+        age: selectedAge,
+        activePresetTab,
+      },
+    }),
+    [
+      base64Image,
+      base64Image2,
+      generateTab,
+      referenceBase64,
+      settings,
+      selectedCategory,
+      selectedStyle,
+      selectedPresetId,
+      selectedGender,
+      selectedAge,
+      activePresetTab,
+    ]
+  );
+
+  const handleGenerate = useCallback(async () => {
+    if (!selectedCategory || !base64Image) return;
+
+    setIsGenerating(true);
+    setGenerateError(null);
+    setProgress(0);
+    setGeneratedResults([]);
+
+    try {
+      const results: string[] = [];
+      for (let i = 0; i < settings.count; i++) {
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 20_000));
+        }
+
+        setProgress((i / settings.count) * 100 + 5);
+
+        const res = await fetch("/api/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildPayload()),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `Error ${res.status}` }));
+          throw new Error(err.error ?? `Error ${res.status}`);
+        }
+
+        const data = await res.json();
+        results.push(data.dataUrl);
+        setGeneratedResults([...results]);
+        setProgress(((i + 1) / settings.count) * 100);
+      }
+
+      setProgress(100);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Terjadi kesalahan tidak terduga";
+      setGenerateError(message);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [selectedCategory, base64Image, settings.count, buildPayload]);
+
+  const handleRegenerateSingle = useCallback(
+    async (index: number) => {
+      if (!selectedCategory || !base64Image) return;
+      if (regeneratingIndices[index]) return;
+
+      setRegeneratingIndices((prev) => ({ ...prev, [index]: true }));
+
+      try {
+        const res = await fetch("/api/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildPayload()),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `Error ${res.status}` }));
+          throw new Error(err.error ?? `Error ${res.status}`);
+        }
+
+        const data = await res.json();
+        setGeneratedResults((prev) => {
+          const next = [...prev];
+          next[index] = data.dataUrl;
+          return next;
+        });
+      } catch (err) {
+        console.error("Regenerate error:", err);
+      } finally {
+        setRegeneratingIndices((prev) => {
+          const next = { ...prev };
+          delete next[index];
+          return next;
+        });
+      }
+    },
+    [selectedCategory, base64Image, regeneratingIndices, buildPayload]
+  );
+
   // ── SubWindow ──
   const openSubWindow = useCallback((key: "posterDetails" | "logo") => {
     setActiveSubWindow(key);
@@ -282,6 +414,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setSettings(INITIAL_SETTINGS);
     setGeneratedResults([]);
     setCaption("");
+    setIsGenerating(false);
+    setProgress(0);
+    setGenerateError(null);
+    setRegeneratingIndices({});
     setWarningModal({ show: false, mode: "" });
     setActiveSubWindow(null);
   }, []);
@@ -308,6 +444,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     referenceImage, referenceBase64, setReferenceImage, clearReferenceImage,
     settings, setSettings, updateSetting, updateDetail,
     logoImage, logoBase64, setLogoImage, clearLogoImage,
+    isGenerating, progress, generateError, regeneratingIndices,
+    handleGenerate, handleRegenerateSingle, clearGenerateError,
     generatedResults, setGeneratedResults,
     caption, setCaption,
     activeSubWindow, openSubWindow, closeSubWindow,

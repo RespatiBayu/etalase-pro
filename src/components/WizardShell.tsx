@@ -6,23 +6,9 @@ import { WarningModal } from "@/components/ui/WarningModal";
 import { Step1Upload } from "@/components/steps/Step1Upload";
 import { Step2Style } from "@/components/steps/Step2Style";
 import { Step3Settings } from "@/components/steps/Step3Settings";
+import { Step4Preview } from "@/components/steps/Step4Preview";
+import { Step5Results } from "@/components/steps/Step5Results";
 import { useProject } from "@/context/ProjectContext";
-
-// Step 4 & 5 placeholders (will be built in Phase 7)
-function Step4Preview() {
-  return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <p className="text-orange-300 font-black uppercase tracking-widest text-sm">Step 4 — Coming Soon</p>
-    </div>
-  );
-}
-function Step5Results() {
-  return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <p className="text-orange-300 font-black uppercase tracking-widest text-sm">Step 5 — Coming Soon</p>
-    </div>
-  );
-}
 
 export function WizardShell() {
   const {
@@ -37,6 +23,7 @@ export function WizardShell() {
     setGeneratedResults,
     setStep,
     performReset,
+    isGenerating,
   } = useProject();
 
   const canGoNext = !(step === 1 && (!selectedCategory || !uploadedImage));
@@ -97,7 +84,7 @@ export function WizardShell() {
         </div>
 
         {/* Footer nav */}
-        {step < 5 && (
+        {step < 5 && !isGenerating && (
           <div className="p-4 md:p-6 border-t border-orange-100 bg-white flex justify-between items-center gap-3 md:gap-4 text-slate-900">
             <button
               onClick={prevStep}
