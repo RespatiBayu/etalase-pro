@@ -42,15 +42,15 @@
 - [x] Git commit
 
 ## Phase 5: Step Pages 1-3
-- [ ] ProjectContext.tsx (React Context for all state)
-- [ ] page.tsx (main wizard page)
-- [ ] Step1Upload.tsx (category + dual upload)
-- [ ] Step2Style.tsx (fashion vs non-fashion paths)
-- [ ] Step3Settings.tsx (toggles, density, count, ideas)
-- [ ] PosterDetailsModal content
-- [ ] LogoSettingsModal content
-- [ ] Verify all interactions work
-- [ ] Git commit
+- [x] ProjectContext.tsx (React Context for all state)
+- [x] page.tsx (main wizard page)
+- [x] Step1Upload.tsx (category + dual upload)
+- [x] Step2Style.tsx (fashion vs non-fashion paths)
+- [x] Step3Settings.tsx (toggles, density, count, ideas)
+- [x] PosterDetailsModal content
+- [x] LogoSettingsModal content
+- [x] Verify all interactions work
+- [x] Git commit
 
 ## Phase 6: API Routes
 - [ ] src/lib/gemini.ts (shared Gemini API client)
@@ -90,6 +90,6 @@
 - [ ] Final verification on production URL
 
 ## Status
-- **Current Phase**: Phase 4 complete
+- **Current Phase**: Phase 5 complete
 - **Blockers**: None
 - **Notes**: —
