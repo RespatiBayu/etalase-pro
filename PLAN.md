@@ -10,16 +10,16 @@
 - [x] Configure Tailwind with orange theme
 - [x] Create base layout.tsx + globals.css
 - [x] Verify npm run dev works
-- [ ] Git commit
+- [x] Git commit
 
 ## Phase 2: Supabase Schema & Client
-- [ ] Create migration SQL (projects, uploads, generated_images tables)
-- [ ] Define RLS policies
-- [ ] Define Storage bucket policies
-- [ ] Create Supabase browser client (src/lib/supabase/client.ts)
-- [ ] Create Supabase server client (src/lib/supabase/server.ts)
-- [ ] Create TypeScript types for DB (src/types/database.ts)
-- [ ] Git commit
+- [x] Create migration SQL (projects, uploads, generated_images tables)
+- [x] Define RLS policies
+- [x] Define Storage bucket policies
+- [x] Create Supabase browser client (src/lib/supabase/client.ts)
+- [x] Create Supabase server client (src/lib/supabase/server.ts)
+- [x] Create TypeScript types for DB (src/types/database.ts)
+- [x] Git commit
 
 ## Phase 3: Config & Constants Migration
 - [ ] src/config/categories.ts — 8 categories with icons, colors, prompts
@@ -90,6 +90,6 @@
 - [ ] Final verification on production URL
 
 ## Status
-- **Current Phase**: Phase 1 complete (pending git commit)
+- **Current Phase**: Phase 2 complete
 - **Blockers**: None
 - **Notes**: —
