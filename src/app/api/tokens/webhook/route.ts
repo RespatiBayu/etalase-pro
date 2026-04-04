@@ -170,11 +170,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
-  const signature = request.headers.get("x-scalev-hmac-sha256") ?? "";
 
-  if (!verifySignature(rawBody, signature)) {
-    console.error("Webhook signature mismatch");
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  // Empty body = Scalev connectivity test ping → respond OK
+  if (!rawBody || rawBody.trim() === "") {
+    return NextResponse.json({ received: true, note: "ping" });
   }
 
   let payload: ScalevWebhookPayload;
@@ -182,6 +181,13 @@ export async function POST(request: NextRequest) {
     payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Verify signature only for real payloads
+  const signature = request.headers.get("x-scalev-hmac-sha256") ?? "";
+  if (SIGNING_SECRET && !verifySignature(rawBody, signature)) {
+    console.error("Webhook signature mismatch");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   // Only handle paid orders
