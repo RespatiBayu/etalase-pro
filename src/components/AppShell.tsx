@@ -11,6 +11,7 @@ import {
   Zap,
   LogOut,
   ChevronRight,
+  Clock,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TokenModal } from "@/components/ui/TokenModal";
@@ -28,8 +29,13 @@ const NAV_MAIN = [
     href: "/editor",
     label: "Foto Editor",
     icon: ImageIcon,
-    available: false,
-    badge: "Segera",
+    available: true,
+  },
+  {
+    href: "/history",
+    label: "Riwayat",
+    icon: Clock,
+    available: true,
   },
   {
     href: "/tracker",

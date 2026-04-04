@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   AlertTriangle,
   RotateCcw,
@@ -74,6 +74,9 @@ export function Step5Results({ onTokensUpdated }: Step5ResultsProps) {
     selectedStyle,
     selectedPresetId,
     generateTab,
+    selectedGender,
+    selectedAge,
+    activePresetTab,
     base64Image,
     caption,
     setCaption,
@@ -84,6 +87,41 @@ export function Step5Results({ onTokensUpdated }: Step5ResultsProps) {
   const { toasts, addToast, dismiss } = useToast();
   const [isCaptionLoading, setIsCaptionLoading] = useState(false);
   const [isCaptionCopied, setIsCaptionCopied] = useState(false);
+
+  // ── Auto-save results to Supabase ──────────────────────────────────────────
+  type SaveStatus = "idle" | "saving" | "saved" | "error";
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const hasSavedRef = useRef(false);
+
+  useEffect(() => {
+    if (generatedResults.length === 0 || hasSavedRef.current) return;
+    hasSavedRef.current = true;
+    setSaveStatus("saving");
+
+    fetch("/api/projects/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: selectedCategory,
+        styleConfig: {
+          selectedStyle,
+          selectedPresetId,
+          generateTab,
+          gender: selectedGender,
+          age: selectedAge,
+          activePresetTab,
+        },
+        settings,
+        images: generatedResults,
+      }),
+    })
+      .then((r) => {
+        if (r.ok) setSaveStatus("saved");
+        else setSaveStatus("error");
+      })
+      .catch(() => setSaveStatus("error"));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generatedResults]);
 
   // ── Download with optional canvas logo merge ──
   const handleDownload = useCallback(
@@ -302,6 +340,26 @@ export function Step5Results({ onTokensUpdated }: Step5ResultsProps) {
       {/* ── Success ── */}
       {!isGenerating && !generateError && generatedResults.length > 0 && (
         <div className="w-full space-y-8 md:space-y-10 animate-in zoom-in-95 duration-700">
+
+          {/* Save status indicator */}
+          <div className="flex justify-end">
+            {saveStatus === "saving" && (
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-orange-400 animate-pulse">
+                <Loader2 size={11} className="animate-spin" /> Menyimpan...
+              </span>
+            )}
+            {saveStatus === "saved" && (
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500">
+                <Check size={11} /> Tersimpan di Riwayat
+              </span>
+            )}
+            {saveStatus === "error" && (
+              <span className="text-[10px] font-bold text-slate-400">
+                (Gagal menyimpan)
+              </span>
+            )}
+          </div>
+
           {/* Image grid */}
           <div className={`grid gap-4 md:gap-6 ${gridClass}`}>
             {generatedResults.map((dataUrl, i) => (
