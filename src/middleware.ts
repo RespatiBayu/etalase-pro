@@ -33,7 +33,8 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/set-password");
+    pathname.startsWith("/set-password") ||
+    pathname.startsWith("/api/"); // API routes handle their own auth
 
   // Redirect unauthenticated users to /login
   if (!user && !isAuthRoute) {
