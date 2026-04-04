@@ -160,7 +160,13 @@ interface ScalevWebhookPayload {
   };
 }
 
-// ─── Route Handler ────────────────────────────────────────────────────────────
+// ─── GET Handler (Scalev URL verification ping) ───────────────────────────────
+
+export async function GET() {
+  return NextResponse.json({ status: "ok", service: "etalase-pro-webhook" });
+}
+
+// ─── POST Handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
