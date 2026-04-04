@@ -45,6 +45,6 @@ CREATE POLICY "Authenticated users can view active packages"
 
 -- Seed default packages (admin updates scalev_url after creating products in Scalev)
 INSERT INTO public.token_packages (name, tokens, price, scalev_url, sort_order) VALUES
-  ('Starter Pack',   30,  69000, 'https://app.scalev.id/checkout/starter',  1),
-  ('Pro Pack',      100,  97000, 'https://app.scalev.id/checkout/pro',      2),
-  ('Ultimate Pack', 210, 199000, 'https://app.scalev.id/checkout/ultimate', 3);
+  ('Starter Pack',   30,  69000, 'https://bayurespati.com/co-ep-token-sp-30t',   1),
+  ('Pro Pack',      100,  97000, 'https://bayurespati.com/co-ep-token-pp-100t',  2),
+  ('Ultimate Pack', 210, 199000, 'https://bayurespati.com/co-ep-token-up-210t',  3);
