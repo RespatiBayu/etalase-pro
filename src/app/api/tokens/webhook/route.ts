@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 
 const SIGNING_SECRET = process.env.SCALEV_SIGNING_SECRET ?? "";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://etalase-pro.vercel.app";
-const GROWTH_PACK_TOKENS = 50; // default for new user signup
+const GROWTH_PACK_TOKENS = 75; // default for new user signup (Growth Pack)
 
 // ─── Signature Verification ───────────────────────────────────────────────────
 
