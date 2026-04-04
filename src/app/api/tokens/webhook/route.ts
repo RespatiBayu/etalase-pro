@@ -2,16 +2,21 @@ import { createHmac } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Use service role key so we can bypass RLS for token operations
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_URL =
   rawUrl && rawUrl.startsWith("http") ? rawUrl : "https://placeholder.supabase.co";
 const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ?? "placeholder_key";
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 const SIGNING_SECRET = process.env.SCALEV_SIGNING_SECRET ?? "";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://etalase-pro.vercel.app";
+const GROWTH_PACK_TOKENS = 50; // default for new user signup
+
+// ─── Signature Verification ───────────────────────────────────────────────────
 
 function verifySignature(body: string, signature: string): boolean {
   const expected = createHmac("sha256", SIGNING_SECRET)
@@ -20,20 +25,7 @@ function verifySignature(body: string, signature: string): boolean {
   return expected === signature;
 }
 
-// Extract token amount from Scalev product name
-// Product names should contain the token count, e.g. "Starter Pack - 10 Token"
-function extractTokenAmount(lineItems: ScalevLineItem[]): number {
-  for (const item of lineItems) {
-    const name = (item.name ?? item.product_name ?? "").toLowerCase();
-    // Match patterns like "10 token", "50token", "token 100"
-    const match = name.match(/(\d+)\s*token|token\s*(\d+)/i);
-    if (match) {
-      const amount = parseInt(match[1] ?? match[2], 10);
-      return amount * (item.quantity ?? 1);
-    }
-  }
-  return 0;
-}
+// ─── Token Amount Extraction ──────────────────────────────────────────────────
 
 interface ScalevLineItem {
   name?: string;
@@ -41,22 +33,26 @@ interface ScalevLineItem {
   quantity?: number;
 }
 
+function extractTokenAmount(lineItems: ScalevLineItem[]): number {
+  for (const item of lineItems) {
+    const name = (item.name ?? item.product_name ?? "").toLowerCase();
+    const match = name.match(/(\d+)\s*token|token\s*(\d+)/i);
+    if (match) {
+      return parseInt(match[1] ?? match[2], 10) * (item.quantity ?? 1);
+    }
+  }
+  // Default to Growth Pack if product name doesn't specify token count
+  return GROWTH_PACK_TOKENS;
+}
+
+// ─── Scalev Order Fetch ───────────────────────────────────────────────────────
+
 interface ScalevOrder {
   order_id: string;
   destination_address?: { email?: string };
   customer?: { email?: string };
   line_items?: ScalevLineItem[];
   items?: ScalevLineItem[];
-}
-
-interface ScalevWebhookPayload {
-  event: string;
-  unique_id: string;
-  timestamp: string;
-  data: {
-    order_id: string;
-    payment_status?: string;
-  };
 }
 
 async function fetchScalevOrder(orderId: string): Promise<ScalevOrder | null> {
@@ -73,15 +69,103 @@ async function fetchScalevOrder(orderId: string): Promise<ScalevOrder | null> {
   }
 
   const json = await res.json();
-  // API may wrap in { data: ... }
   return (json.data ?? json) as ScalevOrder;
 }
+
+// ─── User Provisioning ────────────────────────────────────────────────────────
+
+async function provisionNewUser(email: string, tokenAmount: number): Promise<void> {
+  // Create user + send invite email with set-password link
+  const { data: inviteData, error: inviteError } =
+    await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${APP_URL}/auth/callback?next=/set-password`,
+    });
+
+  if (inviteError) {
+    // If user already exists (was invited before), just ensure profile is approved
+    console.warn(`inviteUserByEmail for ${email}:`, inviteError.message);
+  }
+
+  const userId = inviteData?.user?.id;
+  if (!userId) {
+    console.error(`No user ID returned for ${email}`);
+    return;
+  }
+
+  // Upsert profile — set approved + tokens
+  // (trigger may have already created the row; this handles both cases)
+  const { error: upsertError } = await supabaseAdmin
+    .from("profiles")
+    .upsert(
+      {
+        id: userId,
+        email,
+        role: "user",
+        is_approved: true,
+        tokens: tokenAmount,
+      },
+      { onConflict: "id" }
+    );
+
+  if (upsertError) {
+    console.error("Profile upsert failed:", upsertError);
+  }
+
+  // Record transaction
+  await supabaseAdmin.from("token_transactions").insert({
+    user_id: userId,
+    type: "purchase",
+    amount: tokenAmount,
+    description: `Pembelian awal ${tokenAmount} token (akun baru)`,
+  });
+
+  console.log(`[Webhook] New user ${email} created with ${tokenAmount} tokens`);
+}
+
+async function addTokensToExistingUser(
+  userId: string,
+  currentTokens: number,
+  tokenAmount: number,
+  orderId: string
+): Promise<void> {
+  const newBalance = currentTokens + tokenAmount;
+
+  await supabaseAdmin
+    .from("profiles")
+    .update({ tokens: newBalance })
+    .eq("id", userId);
+
+  await supabaseAdmin.from("token_transactions").insert({
+    user_id: userId,
+    type: "purchase",
+    amount: tokenAmount,
+    description: `Pembelian ${tokenAmount} token (Order ${orderId})`,
+    scalev_order_id: orderId,
+  });
+
+  console.log(
+    `[Webhook] Added ${tokenAmount} tokens to user ${userId} (order ${orderId})`
+  );
+}
+
+// ─── Webhook Payload Types ────────────────────────────────────────────────────
+
+interface ScalevWebhookPayload {
+  event: string;
+  unique_id: string;
+  timestamp: string;
+  data: {
+    order_id: string;
+    payment_status?: string;
+  };
+}
+
+// ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get("x-scalev-hmac-sha256") ?? "";
 
-  // Verify webhook signature
   if (!verifySignature(rawBody, signature)) {
     console.error("Webhook signature mismatch");
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
@@ -94,7 +178,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Only handle payment paid events
+  // Only handle paid orders
   if (
     payload.event !== "order.payment_status_changed" ||
     payload.data?.payment_status !== "paid"
@@ -103,9 +187,8 @@ export async function POST(request: NextRequest) {
   }
 
   const orderId = payload.data.order_id;
-  const uniqueId = payload.unique_id;
 
-  // Idempotency check — skip if already processed
+  // Idempotency — skip if order already processed
   const { data: existing } = await supabaseAdmin
     .from("token_transactions")
     .select("id")
@@ -116,65 +199,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, note: "already processed" });
   }
 
-  // Fetch full order details from Scalev API
+  // Fetch full order from Scalev API
   const order = await fetchScalevOrder(orderId);
   if (!order) {
-    console.error(`Could not fetch order ${orderId}`);
     return NextResponse.json({ error: "Order fetch failed" }, { status: 500 });
   }
 
-  // Get customer email
-  const email =
-    order.destination_address?.email ?? order.customer?.email ?? "";
+  const email = order.destination_address?.email ?? order.customer?.email ?? "";
   if (!email) {
-    console.error(`No email found in order ${orderId}`);
     return NextResponse.json({ error: "No customer email" }, { status: 400 });
   }
 
-  // Get token amount from line items
   const lineItems = order.line_items ?? order.items ?? [];
   const tokenAmount = extractTokenAmount(lineItems);
-  if (tokenAmount <= 0) {
-    console.error(`Could not determine token amount for order ${orderId}`);
-    return NextResponse.json({ error: "Token amount unknown" }, { status: 400 });
-  }
 
-  // Find user by email
-  const { data: profile } = await supabaseAdmin
+  // Check if user already exists
+  const { data: existingProfile } = await supabaseAdmin
     .from("profiles")
     .select("id, tokens")
     .eq("email", email)
+    .returns<{ id: string; tokens: number }[]>()
     .single();
 
-  if (!profile) {
-    console.error(`No profile found for email ${email}`);
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  if (!existingProfile) {
+    // New user → create account + invite email + tokens
+    await provisionNewUser(email, tokenAmount);
+  } else {
+    // Existing user → top up tokens
+    await addTokensToExistingUser(
+      existingProfile.id,
+      existingProfile.tokens ?? 0,
+      tokenAmount,
+      orderId
+    );
   }
-
-  // Add tokens + record transaction (in a transaction-like sequence)
-  const newBalance = (profile.tokens ?? 0) + tokenAmount;
-
-  const { error: updateError } = await supabaseAdmin
-    .from("profiles")
-    .update({ tokens: newBalance })
-    .eq("id", profile.id);
-
-  if (updateError) {
-    console.error("Token update failed:", updateError);
-    return NextResponse.json({ error: "Token update failed" }, { status: 500 });
-  }
-
-  await supabaseAdmin.from("token_transactions").insert({
-    user_id: profile.id,
-    type: "purchase",
-    amount: tokenAmount,
-    description: `Pembelian ${tokenAmount} token (Order ${orderId})`,
-    scalev_order_id: orderId,
-  });
-
-  console.log(
-    `[Webhook] Added ${tokenAmount} tokens to ${email} (order ${orderId}, unique_id ${uniqueId})`
-  );
 
   return NextResponse.json({ received: true, tokens_added: tokenAmount });
 }

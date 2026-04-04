@@ -30,7 +30,10 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/auth");
+  const isAuthRoute =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/set-password");
 
   // Redirect unauthenticated users to /login
   if (!user && !isAuthRoute) {
@@ -39,7 +42,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from /login
+  // Redirect authenticated users away from /login (but NOT from /set-password)
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
