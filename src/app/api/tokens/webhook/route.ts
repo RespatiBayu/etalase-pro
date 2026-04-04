@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 
 const SIGNING_SECRET = process.env.SCALEV_SIGNING_SECRET ?? "";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://etalase-pro.vercel.app";
-const GROWTH_PACK_TOKENS = 50; // default for new user signup (Growth Pack)
+const DEFAULT_NEW_USER_TOKENS = 30; // default for new user signup (Starter Pack)
 
 // ─── Signature Verification ───────────────────────────────────────────────────
 
@@ -41,8 +41,8 @@ function extractTokenAmount(lineItems: ScalevLineItem[]): number {
       return parseInt(match[1] ?? match[2], 10) * (item.quantity ?? 1);
     }
   }
-  // Default to Growth Pack if product name doesn't specify token count
-  return GROWTH_PACK_TOKENS;
+  // Default to Starter Pack if product name doesn't specify token count
+  return DEFAULT_NEW_USER_TOKENS;
 }
 
 // ─── Scalev Order Fetch ───────────────────────────────────────────────────────
