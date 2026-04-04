@@ -57,19 +57,47 @@ interface ScalevOrder {
 
 async function fetchScalevOrder(orderId: string): Promise<ScalevOrder | null> {
   const apiKey = process.env.SCALEV_API_KEY;
-  if (!apiKey) return null;
-
-  const res = await fetch(`https://api.scalev.id/v2/orders/${orderId}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-
-  if (!res.ok) {
-    console.error(`Scalev order fetch failed: ${res.status}`);
+  if (!apiKey) {
+    console.error("SCALEV_API_KEY is not set");
     return null;
   }
 
-  const json = await res.json();
-  return (json.data ?? json) as ScalevOrder;
+  // Try multiple possible Scalev API endpoint patterns
+  const endpoints = [
+    `https://api.scalev.id/v2/orders/${orderId}`,
+    `https://api.scalev.id/v1/orders/${orderId}`,
+    `https://api.scalev.id/orders/${orderId}`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      console.log(`[Webhook] Trying Scalev API: ${url}`);
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const bodyText = await res.text();
+      console.log(`[Webhook] Scalev API ${url} → status=${res.status} body=${bodyText.slice(0, 300)}`);
+
+      if (!res.ok) continue;
+
+      let json: Record<string, unknown>;
+      try {
+        json = JSON.parse(bodyText) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+
+      return ((json.data ?? json) as ScalevOrder) || null;
+    } catch (err) {
+      console.error(`[Webhook] Scalev API fetch error for ${url}:`, err);
+    }
+  }
+
+  return null;
 }
 
 // ─── User Provisioning ────────────────────────────────────────────────────────
@@ -157,6 +185,14 @@ interface ScalevWebhookPayload {
   data: {
     order_id: string;
     payment_status?: string;
+    // Some Scalev events include customer info directly in payload
+    customer_email?: string;
+    email?: string;
+    customer?: { email?: string };
+    destination_address?: { email?: string };
+    buyer_email?: string;
+    line_items?: ScalevLineItem[];
+    items?: ScalevLineItem[];
   };
 }
 
@@ -199,6 +235,7 @@ export async function POST(request: NextRequest) {
   }
 
   const orderId = payload.data.order_id;
+  console.log(`[Webhook] Processing order: ${orderId}`);
 
   // Idempotency — skip if order already processed
   const { data: existing } = await supabaseAdmin
@@ -211,18 +248,42 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, note: "already processed" });
   }
 
-  // Fetch full order from Scalev API
-  const order = await fetchScalevOrder(orderId);
-  if (!order) {
-    return NextResponse.json({ error: "Order fetch failed" }, { status: 500 });
+  // Try to get email from payload first (avoid extra API call)
+  const payloadEmail =
+    payload.data.customer_email ??
+    payload.data.email ??
+    payload.data.destination_address?.email ??
+    payload.data.customer?.email ??
+    payload.data.buyer_email ??
+    "";
+
+  const payloadLineItems = payload.data.line_items ?? payload.data.items ?? [];
+
+  let email = payloadEmail;
+  let lineItems = payloadLineItems;
+
+  // If payload doesn't have email, fetch from Scalev API
+  if (!email) {
+    console.log(`[Webhook] Email not in payload, fetching order from Scalev API...`);
+    const order = await fetchScalevOrder(orderId);
+    if (!order) {
+      console.error(`[Webhook] Could not fetch order ${orderId} from Scalev API`);
+      // Return 200 to prevent Scalev from retrying — log for manual review
+      return NextResponse.json(
+        { received: true, error: "order_fetch_failed", order_id: orderId },
+        { status: 200 }
+      );
+    }
+    email = order.destination_address?.email ?? order.customer?.email ?? "";
+    lineItems = order.line_items ?? order.items ?? [];
   }
 
-  const email = order.destination_address?.email ?? order.customer?.email ?? "";
+  console.log(`[Webhook] Customer email: ${email}, line_items count: ${lineItems.length}`);
+
   if (!email) {
     return NextResponse.json({ error: "No customer email" }, { status: 400 });
   }
 
-  const lineItems = order.line_items ?? order.items ?? [];
   const tokenAmount = extractTokenAmount(lineItems);
 
   // Check if user already exists
