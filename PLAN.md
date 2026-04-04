@@ -118,7 +118,28 @@
 - [ ] /history page — past projects grid with re-download
 - [ ] Storage RLS policies
 
+## Phase A: Navigation Refactor ✅ COMPLETE
+- [x] AppShell.tsx — fixed sidebar (desktop) + bottom nav (mobile)
+- [x] Move wizard to /pro, landing page at /, dashboard at /dashboard
+- [x] /tracker page — ComingSoon placeholder
+- [x] LandingPage.tsx — hero, how it works, pricing, CTA, footer
+- [x] DashboardClient.tsx — token stats, packages, transaction history
+- [x] WizardShell refactored (no sidebar/nav, just wizard)
+- [x] middleware.ts updated (public routes include /, /login, /set-password)
+
+## Phase B: Foto Editor ✅ COMPLETE
+- [x] FabricCanvas.tsx — fabric.js canvas wrapper (SSR-safe, lazy import)
+- [x] EditorShell.tsx — full editor UI (4 tabs: Produk, Background, Teks, Ekspor)
+- [x] Canvas BFS flood-fill background removal (zero deps, browser-only)
+- [x] Background: solid color (10 presets + custom picker)
+- [x] Background: custom image upload
+- [x] Background: Latar AI (6 styles, 1 token per generate)
+- [x] Text overlay on canvas
+- [x] HD PNG export (2× resolution)
+- [x] /api/editor/latar-ai route (auth + token deduction + Gemini)
+- [x] Build zero errors, deployed to Vercel
+
 ## Status
-- **Current Phase**: Phase 9 complete — deciding next phase
+- **Current Phase**: Phase B complete — Foto Editor live
 - **Live URL**: https://etalase-pro.vercel.app
 - **Blockers**: None
