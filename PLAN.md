@@ -112,11 +112,15 @@
 - [ ] FAQ section
 - [ ] Footer
 
-## Phase 12: Save Results to Supabase
-- [ ] Upload generated images to Supabase Storage (results bucket)
-- [ ] Save project + generated_images to DB after generation
-- [ ] /history page — past projects grid with re-download
-- [ ] Storage RLS policies
+## Phase 12: Save Results to Supabase ✅ COMPLETE
+- [x] Upload generated images to Supabase Storage (results bucket)
+- [x] POST /api/projects/save — save project + images + generated_images records
+- [x] GET /api/projects — list projects with thumbnail signed URLs
+- [x] GET /api/projects/[id]/images — per-project images with signed URLs
+- [x] /history page — project grid with modal, thumbnail, per-image download
+- [x] Step5Results auto-save + "Tersimpan di Riwayat" indicator
+- [x] AppShell: Riwayat nav link + Foto Editor enabled
+- [x] 004_results_storage.sql — documents Storage bucket setup
 
 ## Phase A: Navigation Refactor ✅ COMPLETE
 - [x] AppShell.tsx — fixed sidebar (desktop) + bottom nav (mobile)
@@ -140,6 +144,6 @@
 - [x] Build zero errors, deployed to Vercel
 
 ## Status
-- **Current Phase**: Phase B complete — Foto Editor live
+- **Current Phase**: Phase 12 complete — History + Save Results live
 - **Live URL**: https://etalase-pro.vercel.app
-- **Blockers**: None
+- **Blockers**: Perlu setup `results` storage bucket di Supabase Dashboard (lihat 004_results_storage.sql)
