@@ -74,7 +74,7 @@ export default function LoginPage() {
         return;
       }
 
-      window.location.href = "/";
+      window.location.href = "/pro";
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan";
       if (msg.includes("Invalid login credentials")) {

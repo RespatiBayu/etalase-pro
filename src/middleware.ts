@@ -30,14 +30,15 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthRoute =
+  const isPublicRoute =
+    pathname === "/" ||                        // landing page (public)
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/set-password") ||
-    pathname.startsWith("/api/"); // API routes handle their own auth
+    pathname.startsWith("/api/");              // API routes handle their own auth
 
   // Redirect unauthenticated users to /login
-  if (!user && !isAuthRoute) {
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -46,7 +47,7 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from /login (but NOT from /set-password)
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/pro";
     return NextResponse.redirect(url);
   }
 

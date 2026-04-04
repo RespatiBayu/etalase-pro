@@ -71,7 +71,7 @@
 - [x] Connect to API routes
 - [x] Git commit
 
-## Phase 8: Polish & Deploy
+## Phase 8: Polish & Deploy ✅ COMPLETE
 - [x] Replace all alert() with Toast component
 - [x] TypeScript strict — remove all `any`
 - [x] npm run build — zero errors
@@ -80,13 +80,45 @@
 - [x] Update .gitignore
 - [x] Git commit
 - [x] Push to GitHub
-- [ ] Deploy to Vercel
-- [ ] Run SQL migration on Supabase
-- [ ] Create Storage buckets
-- [ ] Set env vars on Vercel
-- [ ] Final verification on production URL
+- [x] Deploy to Vercel
+- [x] Run SQL migrations on Supabase (001, 002, 003_tokens)
+- [x] Set env vars on Vercel
+- [x] Final verification on production URL
+
+## Phase 9: Token System ✅ COMPLETE
+- [x] 003_tokens.sql — add tokens to profiles, token_transactions, token_packages tables
+- [x] Seed token packages (Starter 30/69rb, Pro 100/97rb, Ultimate 210/199rb)
+- [x] POST /api/tokens/webhook — Scalev payment webhook with HMAC-SHA256 verification
+- [x] GET /api/tokens/balance — return current user token balance
+- [x] GET /api/tokens/packages — return active packages
+- [x] /api/generate-image — deduct 1 token per generation, return 402 if insufficient
+- [x] TokenModal component — show packages, open Scalev CO page
+- [x] WizardShell — token balance badge + TokenModal trigger
+- [x] Step5Results — TOKEN_INSUFFICIENT error state with "Beli Token" CTA
+- [x] /set-password page — invited users set their password
+- [x] /auth/callback — handle ?next=/set-password redirect
+- [x] End-to-end test: payment → webhook → user created → invite email → token credited ✅
+
+## Phase 10: User Dashboard & Account
+- [ ] /dashboard page — token balance card, transaction history table
+- [ ] Token usage chart (last 30 days)
+- [ ] Account info (email, plan, join date)
+- [ ] Link from WizardShell header (avatar/profile button)
+
+## Phase 11: Landing Page
+- [ ] / root redirect logic (unauthenticated → landing, authenticated → /app)
+- [ ] Landing page — hero, how it works, pricing section (3 token packages)
+- [ ] Pricing cards with Scalev CO links
+- [ ] FAQ section
+- [ ] Footer
+
+## Phase 12: Save Results to Supabase
+- [ ] Upload generated images to Supabase Storage (results bucket)
+- [ ] Save project + generated_images to DB after generation
+- [ ] /history page — past projects grid with re-download
+- [ ] Storage RLS policies
 
 ## Status
-- **Current Phase**: Phase 8 — code complete, pending deployment
+- **Current Phase**: Phase 9 complete — deciding next phase
+- **Live URL**: https://etalase-pro.vercel.app
 - **Blockers**: None
-- **Notes**: —

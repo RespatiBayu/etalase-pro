@@ -1,44 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ShoppingBag, RotateCcw, ChevronLeft, ChevronRight, LogOut, Zap } from "lucide-react";
+import { RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { WarningModal } from "@/components/ui/WarningModal";
-import { TokenModal } from "@/components/ui/TokenModal";
 import { Step1Upload } from "@/components/steps/Step1Upload";
 import { Step2Style } from "@/components/steps/Step2Style";
 import { Step3Settings } from "@/components/steps/Step3Settings";
 import { Step4Preview } from "@/components/steps/Step4Preview";
 import { Step5Results } from "@/components/steps/Step5Results";
 import { useProject } from "@/context/ProjectContext";
-import { createClient } from "@/lib/supabase/client";
 
-export function WizardShell() {
-  const supabase = createClient();
-  const [showTokenModal, setShowTokenModal] = useState(false);
-  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
-  const [userEmail, setUserEmail] = useState("");
+interface WizardShellProps {
+  onTokensUpdated?: () => void;
+}
 
-  // Fetch token balance + user email on mount
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) setUserEmail(user.email);
-    });
-    refreshTokenBalance();
-  }, []);
-
-  const refreshTokenBalance = () => {
-    fetch("/api/tokens/balance")
-      .then((r) => r.json())
-      .then((data) => setTokenBalance(data.tokens ?? 0))
-      .catch(() => {});
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  };
-
+export function WizardShell({ onTokensUpdated }: WizardShellProps) {
   const {
     step,
     nextStep,
@@ -67,72 +43,32 @@ export function WizardShell() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFF8F0] text-slate-800 font-sans p-2 md:p-8">
+    <div className="p-3 md:p-8">
       <WarningModal
         modal={warningModal}
         onConfirm={handleWarningConfirm}
         onCancel={() => setWarningModal({ show: false, mode: "" })}
       />
 
-      {showTokenModal && (
-        <TokenModal
-          userEmail={userEmail}
-          onClose={() => {
-            setShowTokenModal(false);
-            refreshTokenBalance();
-          }}
-        />
-      )}
-
-      <div className="max-w-6xl mx-auto bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-2xl shadow-orange-100/50 overflow-hidden min-h-[90vh] md:min-h-[850px] flex flex-col border border-orange-100 relative">
+      <div className="max-w-4xl mx-auto bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-2xl shadow-orange-100/50 overflow-hidden min-h-[85vh] flex flex-col border border-orange-100">
         {/* Header */}
         <div className="p-4 md:p-6 border-b border-orange-100/50 bg-white sticky top-0 z-20">
           <div className="flex justify-between items-center mb-4 md:mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-300 rounded-xl flex items-center justify-center shadow-md shadow-orange-200 transform transition-transform hover:rotate-3">
-                <ShoppingBag className="text-white" size={20} />
-              </div>
-              <div className="flex flex-col">
-                <h1 className="text-xl font-black italic tracking-tighter uppercase leading-none text-orange-900">
-                  Etalase Pro 2.0
-                </h1>
-                <p className="text-[9px] font-bold text-orange-300 uppercase tracking-widest mt-0.5 italic">
-                  Foto Rapi, Konversi Happy
-                </p>
-              </div>
+            <div>
+              <h2 className="text-lg font-black italic tracking-tighter uppercase leading-none text-orange-900">
+                Generator Foto
+              </h2>
+              <p className="text-[9px] font-bold text-orange-300 uppercase tracking-widest mt-0.5 italic">
+                Foto Rapi, Konversi Happy
+              </p>
             </div>
-
-            <div className="flex items-center gap-1 md:gap-2">
-              {/* Token balance badge */}
-              <button
-                onClick={() => setShowTokenModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-full border-2 border-orange-100 bg-orange-50 hover:border-orange-300 transition-all"
-              >
-                <Zap size={13} className="text-orange-400" />
-                <span className="text-[11px] font-black text-orange-600">
-                  {tokenBalance === null ? "..." : tokenBalance}
-                </span>
-                <span className="text-[9px] font-bold text-orange-400 hidden sm:inline">
-                  token
-                </span>
-              </button>
-
-              <button
-                onClick={handleNewProjectClick}
-                className="text-[10px] md:text-sm font-bold flex items-center gap-1 md:gap-2 px-3 md:py-2 rounded-full transition-all text-orange-400 hover:text-rose-500 hover:bg-rose-50"
-              >
-                <RotateCcw size={14} />
-                <span className="hidden xs:inline">Mulai Ulang</span>
-              </button>
-
-              <button
-                onClick={handleLogout}
-                title="Keluar"
-                className="text-[10px] md:text-sm font-bold flex items-center gap-1 px-3 md:py-2 rounded-full transition-all text-slate-400 hover:text-rose-500 hover:bg-rose-50"
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
+            <button
+              onClick={handleNewProjectClick}
+              className="text-[10px] font-bold flex items-center gap-1.5 px-3 py-2 rounded-full transition-all text-orange-400 hover:text-rose-500 hover:bg-rose-50"
+            >
+              <RotateCcw size={13} />
+              <span>Mulai Ulang</span>
+            </button>
           </div>
           <StepIndicator currentStep={step} />
         </div>
@@ -143,12 +79,12 @@ export function WizardShell() {
           {step === 2 && <Step2Style />}
           {step === 3 && <Step3Settings />}
           {step === 4 && <Step4Preview />}
-          {step === 5 && <Step5Results onTokensUpdated={refreshTokenBalance} />}
+          {step === 5 && <Step5Results onTokensUpdated={onTokensUpdated} />}
         </div>
 
         {/* Footer nav */}
         {step < 5 && !isGenerating && (
-          <div className="p-4 md:p-6 border-t border-orange-100 bg-white flex justify-between items-center gap-3 md:gap-4 text-slate-900">
+          <div className="p-4 md:p-6 border-t border-orange-100 bg-white flex justify-between items-center gap-3 md:gap-4">
             <button
               onClick={prevStep}
               disabled={step === 1}
