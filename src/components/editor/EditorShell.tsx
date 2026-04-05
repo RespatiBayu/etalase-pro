@@ -238,57 +238,67 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── AI Background Removal (client-side WASM via @imgly/background-removal) ──
-  // Model files are served from imgly's own CDN (staticimgly.com) — the library
-  // default. We explicitly pass it to avoid any path resolution issues in Next.js.
-  // ~30 MB downloaded once then cached by the browser.
-  const BG_REMOVAL_CDN = "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/";
+  // ── AI Background Removal via Gemini API + chroma-key canvas ────────────────
+  // Flow:
+  //   1. POST /api/editor/remove-bg  → Gemini isolates product on pure #00FF00 bg
+  //   2. chromaKeyRemove()           → canvas turns #00FF00 pixels transparent
+  // This replaces the previous @imgly/background-removal WASM approach which had
+  // unresolvable "e.replace is not a function" errors in Next.js webpack context
+  // caused by onnxruntime-web's Node.js build being resolved instead of browser.
 
-  /** Convert a data URL to a Blob without using fetch() (avoids browser quirks) */
-  const dataUrlToBlob = useCallback((dataUrl: string): Blob => {
-    const [header, b64data] = dataUrl.split(",");
-    const mime = header.match(/:(.*?);/)?.[1] ?? "image/png";
-    const binary = atob(b64data);
-    const array = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
-    return new Blob([array], { type: mime });
+  /** Canvas chroma-key: replaces near-#00FF00 pixels with transparency */
+  const chromaKeyRemove = useCallback((dataUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width  = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data  = frame.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          // Match pure chroma-green: low R, high G, low B (with tolerance ±60)
+          if (r < 80 && g > 170 && b < 80) {
+            data[i + 3] = 0; // fully transparent
+          }
+        }
+        ctx.putImageData(frame, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
   }, []);
 
-  /** Remove background from a data URL and return a transparent PNG data URL */
+  /** Full remove-bg pipeline: Gemini green-screen → chroma-key → transparent PNG */
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    // Dynamic import — keeps library out of initial bundle, SSR-safe
-    const { removeBackground } = await import("@imgly/background-removal");
+    // Extract raw base64 (strip data:…;base64, prefix)
+    const base64Image = sourceDataUrl.split(",")[1] ?? sourceDataUrl;
 
-    // Convert data URL → Blob → blob: URL.
-    // The library internally calls .replace() on its input, so it MUST receive
-    // a proper URL string (blob: or http:), NOT a Blob object or data: URL.
-    const blob = dataUrlToBlob(sourceDataUrl);
-    const blobUrl = URL.createObjectURL(blob);
+    const res = await fetch("/api/editor/remove-bg", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ base64Image }),
+    });
 
-    try {
-      // Run AI segmentation — use official imgly CDN for model files
-      const resultBlob = await removeBackground(blobUrl, {
-        publicPath: BG_REMOVAL_CDN,
-        debug: false,
-      });
-
-      // Convert result Blob → data URL
-      return await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror  = reject;
-        reader.readAsDataURL(resultBlob);
-      });
-    } finally {
-      // Always revoke to free memory
-      URL.revokeObjectURL(blobUrl);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      throw new Error(body.error ?? `Server error ${res.status}`);
     }
-  }, [BG_REMOVAL_CDN, dataUrlToBlob]);
+
+    const { imageUrl } = await res.json() as { imageUrl: string };
+
+    // Remove chroma-green (#00FF00) pixels on client → transparent PNG
+    return chromaKeyRemove(imageUrl);
+  }, [chromaKeyRemove]);
 
   const handleRemoveBg = useCallback(async () => {
     if (!uploadedDataUrl) return;
     setIsRemoving(true);
-    setRemoveStatus("Memuat AI model...");
+    setRemoveStatus("AI memproses gambar...");
     try {
       const result = await runAiRemoval(uploadedDataUrl);
       setProcessedDataUrl(result);
@@ -622,7 +632,7 @@ export function EditorShell() {
                   }`}>{removeStatus}</p>
                 )}
                 <p className="text-[8px] text-slate-400 text-center">
-                  AI model diproses di browser. Cocok untuk semua jenis background. Gratis.
+                  Diproses oleh AI Gemini. Cocok untuk semua jenis background.
                 </p>
               </Section>
 
