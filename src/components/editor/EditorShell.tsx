@@ -185,49 +185,55 @@ export function EditorShell() {
       .catch(() => {});
   }, []);
 
-  // ── When canvas is ready, load pending product ─────────────────────────────
+  // ── Canvas lifecycle ────────────────────────────────────────────────────────
   const activeDataUrl = processedDataUrl ?? uploadedDataUrl;
+
+  // Called by FabricCanvas once fabric is fully initialised (also on re-init)
   const handleCanvasReady = useCallback(() => {
     setCanvasReady(true);
   }, []);
 
-  // Re-load product whenever canvas becomes ready OR the active image changes
+  // Single source of truth: whenever canvas is ready AND we have an image, load it.
+  // Also fires after ratio change because handleRatioChange resets canvasReady→false
+  // then the new canvas sets it back to true via onReady.
   useEffect(() => {
-    if (!canvasReady || !activeDataUrl) return;
+    if (!canvasReady) return;
+    if (!activeDataUrl) {
+      fabricRef.current?.setBackground(bgColor);
+      return;
+    }
     fabricRef.current?.loadProduct(activeDataUrl);
     if (bgImageUrl) fabricRef.current?.setBackgroundImage(bgImageUrl);
     else fabricRef.current?.setBackground(bgColor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasReady, activeDataUrl]);
 
-  // ── Re-load product when ratio changes ────────────────────────────────────
-  useEffect(() => {
-    if (!canvasReady || !activeDataUrl) return;
-    const t = setTimeout(() => {
-      fabricRef.current?.loadProduct(activeDataUrl);
-      if (bgImageUrl) fabricRef.current?.setBackgroundImage(bgImageUrl);
-      else fabricRef.current?.setBackground(bgColor);
-    }, 150);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ratio]);
+  // ── Ratio change ───────────────────────────────────────────────────────────
+  // Reset canvasReady so the effect above waits for the new canvas to be ready
+  const handleRatioChange = useCallback((newRatio: string) => {
+    setCanvasReady(false);   // effect won't run until new canvas calls onReady
+    setRatio(newRatio);
+  }, []);
 
   // ── Upload product ─────────────────────────────────────────────────────────
   const handleProductUpload = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const dataUrl = reader.result as string;
-      setUploadedDataUrl(dataUrl);
-      setProcessedDataUrl(null);
-      // Clear previous headline/tagline from canvas
+      // Clear overlays from previous session
       fabricRef.current?.removeById("headline");
       fabricRef.current?.removeById("tagline");
       fabricRef.current?.removeById("logo");
-      fabricRef.current?.setBackground("#FFFFFF");
+      fabricRef.current?.removeById("siapkan");
+      fabricRef.current?.removeById("fitur");
       fabricRef.current?.clearBackgroundImage("#FFFFFF");
-      fabricRef.current?.loadProduct(dataUrl);
+      // Update state — useEffect([canvasReady, activeDataUrl]) will load product
       setBgColor("#FFFFFF");
       setBgImageUrl(null);
+      setHeadlineText("");
+      setTaglineText("");
+      setProcessedDataUrl(null);
+      setUploadedDataUrl(dataUrl);   // ← this changes activeDataUrl → triggers effect
     };
     reader.readAsDataURL(file);
   }, []);
@@ -307,10 +313,9 @@ export function EditorShell() {
     setRemoveStatus("Menghapus background...");
     try {
       const result = await runBFSRemoval(uploadedDataUrl);
+      // Setting processedDataUrl changes activeDataUrl → triggers useEffect → reloads product
       setProcessedDataUrl(result);
       setRemoveStatus("Selesai!");
-      fabricRef.current?.clearProduct();
-      fabricRef.current?.loadProduct(result);
     } catch {
       setRemoveStatus("Gagal. Coba lagi.");
     } finally {
@@ -516,6 +521,15 @@ export function EditorShell() {
 
   // ── Reset ──────────────────────────────────────────────────────────────────
   const handleReset = useCallback(() => {
+    // Canvas operations first
+    fabricRef.current?.clearProduct();
+    fabricRef.current?.clearBackgroundImage("#FFFFFF");
+    fabricRef.current?.removeById("headline");
+    fabricRef.current?.removeById("tagline");
+    fabricRef.current?.removeById("logo");
+    fabricRef.current?.removeById("siapkan");
+    fabricRef.current?.removeById("fitur");
+    // Then reset state
     setUploadedDataUrl(null);
     setProcessedDataUrl(null);
     setBgColor("#FFFFFF");
@@ -525,13 +539,6 @@ export function EditorShell() {
     setLogoDataUrl(null);
     setFiturList(["", "", ""]);
     setAiError("");
-    fabricRef.current?.clearBackgroundImage("#FFFFFF");
-    fabricRef.current?.clearProduct();
-    fabricRef.current?.removeById("headline");
-    fabricRef.current?.removeById("tagline");
-    fabricRef.current?.removeById("logo");
-    fabricRef.current?.removeById("siapkan");
-    fabricRef.current?.removeById("fitur");
   }, []);
 
   // ── Download ───────────────────────────────────────────────────────────────
@@ -986,7 +993,7 @@ export function EditorShell() {
               <Section title="Rasio" icon={<Download size={13} />} defaultOpen={true}>
                 <div className="grid grid-cols-3 gap-1.5">
                   {RATIOS.map((r) => (
-                    <button key={r.id} onClick={() => setRatio(r.id)}
+                    <button key={r.id} onClick={() => handleRatioChange(r.id)}
                       className={`py-2.5 rounded-xl border-2 transition-all text-center ${
                         ratio === r.id
                           ? "border-orange-400 bg-orange-50 shadow-md shadow-orange-100"

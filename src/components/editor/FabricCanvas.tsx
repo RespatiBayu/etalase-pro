@@ -165,6 +165,8 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
       canvasRef.current?.dispose();
       canvasRef.current = null;
       productRef.current = null;
+      // Clear stale pending ops so they don't replay into the new canvas
+      pendingRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height]);
@@ -205,6 +207,8 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
               });
               productRef.current = img;
               canvas.add(img);
+              // Product must sit BELOW text/logo overlays
+              canvas.sendToBack(img);
               canvas.setActiveObject(img);
               canvas.renderAll();
             },
