@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import dynamic from "next/dynamic";
 import {
   Upload, Trash2, Loader2, Wand2, Palette, Type,
   Download, RotateCcw, Zap, Check, Image as ImageIcon,
@@ -9,9 +8,11 @@ import {
   AlignCenter, AlignRight, Bold, Italic, X, Plus,
   Layers, Tag,
 } from "lucide-react";
+// Regular import is safe — FabricCanvas has "use client" and no top-level
+// fabric imports (fabric is lazy-loaded inside useEffect/handlers only).
+// Using next/dynamic breaks forwardRef so fabricRef.current stays null.
+import FabricCanvas from "./FabricCanvas";
 import type { FabricHandle, TextStyle, LogoPosition } from "./FabricCanvas";
-
-const FabricCanvas = dynamic(() => import("./FabricCanvas"), { ssr: false });
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
