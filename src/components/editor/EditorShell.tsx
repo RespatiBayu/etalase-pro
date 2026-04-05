@@ -238,35 +238,38 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── AI Background Removal (server-side, @imgly/background-removal-node) ────
-  /** Convert a data URL to base64 string (strips the "data:...;base64," prefix) */
-  const dataUrlToBase64 = useCallback((dataUrl: string): string => {
-    return dataUrl.split(",")[1] ?? dataUrl;
-  }, []);
+  // ── AI Background Removal (client-side WASM via @imgly/background-removal) ──
+  // Runs entirely in the browser — no server round-trip, no Vercel size limit.
+  // Model (~30 MB) is downloaded once on first use and cached by the browser.
 
-  /** Call /api/editor/remove-bg and return result as data URL */
-  const callRemoveBgApi = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    const base64Image = dataUrlToBase64(sourceDataUrl);
-    const res = await fetch("/api/editor/remove-bg", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ base64Image }),
+  /** Remove background from a data URL and return a transparent PNG data URL */
+  const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
+    // Dynamic import keeps it out of the initial bundle and SSR-safe
+    const { removeBackground } = await import("@imgly/background-removal");
+
+    // Convert data URL → Blob for the library
+    const fetchRes  = await fetch(sourceDataUrl);
+    const inputBlob = await fetchRes.blob();
+
+    // AI segmentation (ONNX WASM)
+    const resultBlob = await removeBackground(inputBlob);
+
+    // Convert result Blob → data URL
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror  = reject;
+      reader.readAsDataURL(resultBlob);
     });
-    if (!res.ok) {
-      const d = await res.json() as { error?: string };
-      throw new Error(d.error ?? "Gagal menghapus background.");
-    }
-    const d = await res.json() as { imageUrl: string };
-    return d.imageUrl;
-  }, [dataUrlToBase64]);
+  }, []);
 
   const handleRemoveBg = useCallback(async () => {
     if (!uploadedDataUrl) return;
     setIsRemoving(true);
-    setRemoveStatus("Mendeteksi objek dengan AI...");
+    setRemoveStatus("Memuat AI model...");
     try {
-      const result = await callRemoveBgApi(uploadedDataUrl);
-      // Setting processedDataUrl changes activeDataUrl → triggers useEffect → reloads product
+      const result = await runAiRemoval(uploadedDataUrl);
+      // Setting processedDataUrl changes activeDataUrl → triggers useEffect → reloads canvas
       setProcessedDataUrl(result);
       setRemoveStatus("Selesai!");
     } catch (err) {
@@ -275,7 +278,7 @@ export function EditorShell() {
       setIsRemoving(false);
       setTimeout(() => setRemoveStatus(""), 3000);
     }
-  }, [uploadedDataUrl, callRemoveBgApi]);
+  }, [uploadedDataUrl, runAiRemoval]);
 
   // ── Background ─────────────────────────────────────────────────────────────
   const applyBgColor = useCallback((color: string) => {
@@ -446,12 +449,12 @@ export function EditorShell() {
   const handleBatchProcess = useCallback(async () => {
     if (batchFiles.length === 0) return;
     setBatchProcessing(true);
-    // Process sequentially to avoid overloading the server
+    // Process sequentially — WASM model runs in-browser, one at a time
     const results: typeof batchFiles = [];
     for (const item of batchFiles) {
       if (batchBgTab === "hapus") {
         try {
-          const processed = await callRemoveBgApi(item.orig);
+          const processed = await runAiRemoval(item.orig);
           results.push({ ...item, processed });
         } catch {
           results.push(item); // keep original on error
@@ -462,7 +465,7 @@ export function EditorShell() {
     }
     setBatchFiles(results);
     setBatchProcessing(false);
-  }, [batchFiles, batchBgTab, callRemoveBgApi]);
+  }, [batchFiles, batchBgTab, runAiRemoval]);
 
   const downloadBatchItem = useCallback((dataUrl: string, name: string) => {
     const a = document.createElement("a");
@@ -591,7 +594,7 @@ export function EditorShell() {
                   }
                 </button>
                 <p className="text-[8px] text-slate-400 text-center">
-                  Menggunakan AI model — cocok untuk semua jenis background. Gratis.
+                  AI model diproses di browser. Cocok untuk semua jenis background. Gratis.
                 </p>
               </Section>
 

@@ -1,12 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    // Next.js 14 key — tell webpack NOT to bundle native .node binary packages.
-    // They must be required at runtime by Node.js directly.
-    serverComponentsExternalPackages: [
-      "@imgly/background-removal-node",
-      "onnxruntime-node",
-    ],
+  webpack: (config) => {
+    // Fix: onnxruntime-web ships .mjs ES modules that webpack tries to
+    // process as CommonJS — tell it to treat them as javascript/auto.
+    config.module.rules.push({
+      test: /\.mjs$/,
+      include: /node_modules/,
+      type: "javascript/auto",
+      resolve: { fullySpecified: false },
+    });
+
+    // Do NOT bundle native onnxruntime-node binary on the client side
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "sharp$": false,
+      "onnxruntime-node$": false,
+    };
+
+    return config;
   },
 };
 

@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@imgly/background-removal-node": "^1.4.5",
+    "@imgly/background-removal": "^1.7.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
     "fabric": "^5.5.2",
