@@ -239,9 +239,10 @@ export function EditorShell() {
   }, []);
 
   // ── AI Background Removal (client-side WASM via @imgly/background-removal) ──
-  // Model files (~30 MB) are loaded once from CDN and cached by the browser.
-  // We pass an explicit publicPath so webpack/Next.js bundling never blocks it.
-  const BG_REMOVAL_CDN = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/";
+  // Model files are served from imgly's own CDN (staticimgly.com) — the library
+  // default. We explicitly pass it to avoid any path resolution issues in Next.js.
+  // ~30 MB downloaded once then cached by the browser.
+  const BG_REMOVAL_CDN = "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/";
 
   /** Remove background from a data URL and return a transparent PNG data URL */
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
@@ -252,11 +253,11 @@ export function EditorShell() {
     const res  = await fetch(sourceDataUrl);
     const blob = await res.blob();
 
-    // Run AI segmentation with explicit CDN path so WASM files are always found
+    // Run AI segmentation — use official imgly CDN for model files
     const resultBlob = await removeBackground(blob, {
       publicPath: BG_REMOVAL_CDN,
+      proxyToWorker: false,  // avoid SharedArrayBuffer/COOP/COEP requirement
       debug: false,
-      proxyToWorker: false,   // avoid SharedArrayBuffer requirement (COOP/COEP)
     });
 
     // Convert result Blob → data URL
