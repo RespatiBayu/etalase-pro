@@ -190,12 +190,14 @@ export function EditorShell() {
     setCanvasReady(true);
   }, []);
 
+  // Re-load product whenever canvas becomes ready OR the active image changes
   useEffect(() => {
     if (!canvasReady || !activeDataUrl) return;
     fabricRef.current?.loadProduct(activeDataUrl);
-    fabricRef.current?.setBackground(bgColor);
+    if (bgImageUrl) fabricRef.current?.setBackgroundImage(bgImageUrl);
+    else fabricRef.current?.setBackground(bgColor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasReady]);
+  }, [canvasReady, activeDataUrl]);
 
   // ── Re-load product when ratio changes ────────────────────────────────────
   useEffect(() => {

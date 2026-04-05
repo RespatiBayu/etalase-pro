@@ -181,9 +181,15 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
             canvas.remove(productRef.current);
             productRef.current = null;
           }
+          // No crossOrigin for data URLs — setting it causes silent failure
+          const isDataUrl = dataUrl.startsWith("data:");
           fabric.Image.fromURL(
             dataUrl,
             (img: F) => {
+              if (!img || !img.width) {
+                console.error("[FabricCanvas] loadProduct: fromURL failed");
+                return;
+              }
               const scale = Math.min(
                 (canvas.width  * 0.80) / img.width,
                 (canvas.height * 0.80) / img.height
@@ -202,7 +208,7 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
               canvas.setActiveObject(img);
               canvas.renderAll();
             },
-            { crossOrigin: "anonymous" }
+            isDataUrl ? undefined : { crossOrigin: "anonymous" }
           );
         });
       });
@@ -234,9 +240,14 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
       run(() => {
         const canvas: F = canvasRef.current;
         import("fabric").then(({ fabric }) => {
+          const isBgDataUrl = dataUrl.startsWith("data:");
           fabric.Image.fromURL(
             dataUrl,
             (img: F) => {
+              if (!img || !img.width) {
+                console.error("[FabricCanvas] setBackgroundImage: fromURL failed");
+                return;
+              }
               const scale = Math.max(
                 canvas.width  / img.width,
                 canvas.height / img.height
@@ -257,7 +268,7 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
                 canvas.renderAll();
               });
             },
-            { crossOrigin: "anonymous" }
+            isBgDataUrl ? undefined : { crossOrigin: "anonymous" }
           );
         });
       });
@@ -344,9 +355,14 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
           const pad     = cW * 0.04;
           const pos     = opts.position ?? "br";
 
+          const isOverlayDataUrl = dataUrl.startsWith("data:");
           fabric.Image.fromURL(
             dataUrl,
             (img: F) => {
+              if (!img || !img.width) {
+                console.error("[FabricCanvas] setImageById: fromURL failed for id=", id);
+                return;
+              }
               const targetW = cW * wFrac;
               const scale   = targetW / img.width;
               const logoH   = img.height * scale;
@@ -365,7 +381,7 @@ const FabricCanvas = forwardRef<FabricHandle, Props>(({ width, height, onReady }
               canvas.bringToFront(img);
               canvas.renderAll();
             },
-            { crossOrigin: "anonymous" }
+            isOverlayDataUrl ? undefined : { crossOrigin: "anonymous" }
           );
         });
       });
