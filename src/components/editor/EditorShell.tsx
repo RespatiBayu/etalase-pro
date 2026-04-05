@@ -239,29 +239,34 @@ export function EditorShell() {
   }, []);
 
   // ── AI Background Removal (client-side WASM via @imgly/background-removal) ──
-  // Runs entirely in the browser — no server round-trip, no Vercel size limit.
-  // Model (~30 MB) is downloaded once on first use and cached by the browser.
+  // Model files (~30 MB) are loaded once from CDN and cached by the browser.
+  // We pass an explicit publicPath so webpack/Next.js bundling never blocks it.
+  const BG_REMOVAL_CDN = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/";
 
   /** Remove background from a data URL and return a transparent PNG data URL */
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    // Dynamic import keeps it out of the initial bundle and SSR-safe
+    // Dynamic import — keeps library out of initial bundle, SSR-safe
     const { removeBackground } = await import("@imgly/background-removal");
 
-    // Convert data URL → Blob for the library
-    const fetchRes  = await fetch(sourceDataUrl);
-    const inputBlob = await fetchRes.blob();
+    // Convert data URL → Blob
+    const res  = await fetch(sourceDataUrl);
+    const blob = await res.blob();
 
-    // AI segmentation (ONNX WASM)
-    const resultBlob = await removeBackground(inputBlob);
+    // Run AI segmentation with explicit CDN path so WASM files are always found
+    const resultBlob = await removeBackground(blob, {
+      publicPath: BG_REMOVAL_CDN,
+      debug: false,
+      proxyToWorker: false,   // avoid SharedArrayBuffer requirement (COOP/COEP)
+    });
 
     // Convert result Blob → data URL
-    return new Promise<string>((resolve, reject) => {
+    return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
       reader.onerror  = reject;
       reader.readAsDataURL(resultBlob);
     });
-  }, []);
+  }, [BG_REMOVAL_CDN]);
 
   const handleRemoveBg = useCallback(async () => {
     if (!uploadedDataUrl) return;
@@ -269,14 +274,14 @@ export function EditorShell() {
     setRemoveStatus("Memuat AI model...");
     try {
       const result = await runAiRemoval(uploadedDataUrl);
-      // Setting processedDataUrl changes activeDataUrl → triggers useEffect → reloads canvas
       setProcessedDataUrl(result);
       setRemoveStatus("Selesai!");
     } catch (err) {
+      console.error("[remove-bg]", err);
       setRemoveStatus(err instanceof Error ? err.message : "Gagal. Coba lagi.");
     } finally {
       setIsRemoving(false);
-      setTimeout(() => setRemoveStatus(""), 3000);
+      setTimeout(() => setRemoveStatus(""), 4000);
     }
   }, [uploadedDataUrl, runAiRemoval]);
 
@@ -593,6 +598,12 @@ export function EditorShell() {
                     : <><Wand2 size={11} /> Hapus Background</>
                   }
                 </button>
+                {/* Error/status message */}
+                {!isRemoving && removeStatus && (
+                  <p className={`text-[8px] text-center font-bold px-2 py-1 rounded-lg ${
+                    removeStatus.startsWith("Selesai") ? "text-emerald-600 bg-emerald-50" : "text-rose-500 bg-rose-50"
+                  }`}>{removeStatus}</p>
+                )}
                 <p className="text-[8px] text-slate-400 text-center">
                   AI model diproses di browser. Cocok untuk semua jenis background. Gratis.
                 </p>
