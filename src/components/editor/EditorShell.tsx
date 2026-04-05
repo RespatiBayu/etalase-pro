@@ -238,91 +238,44 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── BFS flood-fill background removal ─────────────────────────────────────
-  const runBFSRemoval = useCallback(
-    (sourceDataUrl: string): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const canvas  = document.createElement("canvas");
-            canvas.width  = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext("2d")!;
-            ctx.drawImage(img, 0, 0);
+  // ── AI Background Removal (server-side, @imgly/background-removal-node) ────
+  /** Convert a data URL to base64 string (strips the "data:...;base64," prefix) */
+  const dataUrlToBase64 = useCallback((dataUrl: string): string => {
+    return dataUrl.split(",")[1] ?? dataUrl;
+  }, []);
 
-            const { width, height } = canvas;
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data      = imageData.data;
-
-            // Sample bg colour from 4 corners
-            const corners = [[0,0],[width-1,0],[0,height-1],[width-1,height-1]];
-            let rS = 0, gS = 0, bS = 0;
-            for (const [cx, cy] of corners) {
-              const i = (cy * width + cx) * 4;
-              rS += data[i]; gS += data[i+1]; bS += data[i+2];
-            }
-            const bgR = rS / 4, bgG = gS / 4, bgB = bS / 4;
-
-            const TOLERANCE = 40;
-            const visited   = new Uint8Array(width * height);
-            const queue: number[] = [];
-
-            const dist = (i: number) => {
-              const dr = data[i]   - bgR;
-              const dg = data[i+1] - bgG;
-              const db = data[i+2] - bgB;
-              return Math.sqrt(dr*dr + dg*dg + db*db);
-            };
-
-            const enqueue = (px: number, py: number) => {
-              const idx = py * width + px;
-              if (visited[idx]) return;
-              visited[idx] = 1;
-              if (dist(idx * 4) <= TOLERANCE) queue.push(idx);
-            };
-
-            for (let x = 0; x < width; x++) { enqueue(x, 0); enqueue(x, height-1); }
-            for (let y = 1; y < height-1; y++) { enqueue(0, y); enqueue(width-1, y); }
-
-            const dx = [1,-1,0,0], dy = [0,0,1,-1];
-            while (queue.length > 0) {
-              const idx = queue.pop()!;
-              data[idx * 4 + 3] = 0;
-              const px = idx % width, py = Math.floor(idx / width);
-              for (let d = 0; d < 4; d++) {
-                const nx = px + dx[d], ny = py + dy[d];
-                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-                enqueue(nx, ny);
-              }
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-            resolve(canvas.toDataURL("image/png"));
-          } catch (e) { reject(e); }
-        };
-        img.onerror = reject;
-        img.src = sourceDataUrl;
-      });
-    }, []
-  );
+  /** Call /api/editor/remove-bg and return result as data URL */
+  const callRemoveBgApi = useCallback(async (sourceDataUrl: string): Promise<string> => {
+    const base64Image = dataUrlToBase64(sourceDataUrl);
+    const res = await fetch("/api/editor/remove-bg", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base64Image }),
+    });
+    if (!res.ok) {
+      const d = await res.json() as { error?: string };
+      throw new Error(d.error ?? "Gagal menghapus background.");
+    }
+    const d = await res.json() as { imageUrl: string };
+    return d.imageUrl;
+  }, [dataUrlToBase64]);
 
   const handleRemoveBg = useCallback(async () => {
     if (!uploadedDataUrl) return;
     setIsRemoving(true);
-    setRemoveStatus("Menghapus background...");
+    setRemoveStatus("Mendeteksi objek dengan AI...");
     try {
-      const result = await runBFSRemoval(uploadedDataUrl);
+      const result = await callRemoveBgApi(uploadedDataUrl);
       // Setting processedDataUrl changes activeDataUrl → triggers useEffect → reloads product
       setProcessedDataUrl(result);
       setRemoveStatus("Selesai!");
-    } catch {
-      setRemoveStatus("Gagal. Coba lagi.");
+    } catch (err) {
+      setRemoveStatus(err instanceof Error ? err.message : "Gagal. Coba lagi.");
     } finally {
       setIsRemoving(false);
-      setTimeout(() => setRemoveStatus(""), 2000);
+      setTimeout(() => setRemoveStatus(""), 3000);
     }
-  }, [uploadedDataUrl, runBFSRemoval]);
+  }, [uploadedDataUrl, callRemoveBgApi]);
 
   // ── Background ─────────────────────────────────────────────────────────────
   const applyBgColor = useCallback((color: string) => {
@@ -493,24 +446,23 @@ export function EditorShell() {
   const handleBatchProcess = useCallback(async () => {
     if (batchFiles.length === 0) return;
     setBatchProcessing(true);
-    const results = await Promise.all(
-      batchFiles.map(async (item) => {
-        if (batchBgTab === "hapus") {
-          try {
-            const processed = await runBFSRemoval(item.orig);
-            return { ...item, processed };
-          } catch {
-            return item;
-          }
-        } else {
-          // apply color bg — just keep original with tint overlay removed
-          return { ...item, processed: item.orig };
+    // Process sequentially to avoid overloading the server
+    const results: typeof batchFiles = [];
+    for (const item of batchFiles) {
+      if (batchBgTab === "hapus") {
+        try {
+          const processed = await callRemoveBgApi(item.orig);
+          results.push({ ...item, processed });
+        } catch {
+          results.push(item); // keep original on error
         }
-      })
-    );
+      } else {
+        results.push({ ...item, processed: item.orig });
+      }
+    }
     setBatchFiles(results);
     setBatchProcessing(false);
-  }, [batchFiles, batchBgTab, runBFSRemoval]);
+  }, [batchFiles, batchBgTab, callRemoveBgApi]);
 
   const downloadBatchItem = useCallback((dataUrl: string, name: string) => {
     const a = document.createElement("a");
@@ -639,7 +591,7 @@ export function EditorShell() {
                   }
                 </button>
                 <p className="text-[8px] text-slate-400 text-center">
-                  Cocok untuk background polos/solid. Gratis.
+                  Menggunakan AI model — cocok untuk semua jenis background. Gratis.
                 </p>
               </Section>
 
