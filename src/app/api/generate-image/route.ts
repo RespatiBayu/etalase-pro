@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateImage } from "@/lib/gemini";
 import { buildAiPrompt } from "@/lib/prompt-builder";
+
+// Vercel Hobby allows up to 60s; Pro allows up to 300s.
+// Gemini image generation typically takes 20-60s.
+export const maxDuration = 60;
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import type { GenerateImagePayload } from "@/types";

@@ -1,8 +1,9 @@
 // Server-side only — never import this from client components
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const IMAGE_MODEL = "gemini-2.0-flash-exp-image-generation";
-const TEXT_MODEL = "gemini-2.0-flash";
+// Model names — keep in sync with reference/original-app.jsx
+const IMAGE_MODEL = "gemini-2.5-flash-image-preview";     // TEXT + IMAGE output
+const TEXT_MODEL  = "gemini-2.5-flash-preview-09-2025";   // TEXT only
 
 function getApiKey(): string {
   const key = process.env.GEMINI_API_KEY;

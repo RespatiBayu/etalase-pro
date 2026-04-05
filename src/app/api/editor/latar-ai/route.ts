@@ -4,6 +4,8 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { generateImage } from "@/lib/gemini";
 
+export const maxDuration = 60;
+
 // ─── Supabase clients ─────────────────────────────────────────────────────────
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

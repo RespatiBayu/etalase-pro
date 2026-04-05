@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "@/lib/gemini";
 import type { GenerateCaptionPayload, GenerateCaptionResult } from "@/types";
 
+export const maxDuration = 60;
+
 function buildCaptionPrompt(payload: GenerateCaptionPayload): string {
   const d = payload.details;
   const detailsText = `

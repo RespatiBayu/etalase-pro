@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "@/lib/gemini";
 import type { GenerateTextPayload, GenerateTextResult } from "@/types";
 
+export const maxDuration = 60;
+
 const PROMPT = `
 Analyze this product image and identify what it is.
 Based on the image, generate short and catchy marketing text in INDONESIAN language (Bahasa Indonesia).
