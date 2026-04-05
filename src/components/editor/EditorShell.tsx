@@ -244,30 +244,46 @@ export function EditorShell() {
   // ~30 MB downloaded once then cached by the browser.
   const BG_REMOVAL_CDN = "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/";
 
+  /** Convert a data URL to a Blob without using fetch() (avoids browser quirks) */
+  const dataUrlToBlob = useCallback((dataUrl: string): Blob => {
+    const [header, b64data] = dataUrl.split(",");
+    const mime = header.match(/:(.*?);/)?.[1] ?? "image/png";
+    const binary = atob(b64data);
+    const array = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
+    return new Blob([array], { type: mime });
+  }, []);
+
   /** Remove background from a data URL and return a transparent PNG data URL */
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
     // Dynamic import — keeps library out of initial bundle, SSR-safe
     const { removeBackground } = await import("@imgly/background-removal");
 
-    // Convert data URL → Blob
-    const res  = await fetch(sourceDataUrl);
-    const blob = await res.blob();
+    // Convert data URL → Blob → blob: URL.
+    // The library internally calls .replace() on its input, so it MUST receive
+    // a proper URL string (blob: or http:), NOT a Blob object or data: URL.
+    const blob = dataUrlToBlob(sourceDataUrl);
+    const blobUrl = URL.createObjectURL(blob);
 
-    // Run AI segmentation — use official imgly CDN for model files
-    const resultBlob = await removeBackground(blob, {
-      publicPath: BG_REMOVAL_CDN,
-      proxyToWorker: false,  // avoid SharedArrayBuffer/COOP/COEP requirement
-      debug: false,
-    });
+    try {
+      // Run AI segmentation — use official imgly CDN for model files
+      const resultBlob = await removeBackground(blobUrl, {
+        publicPath: BG_REMOVAL_CDN,
+        debug: false,
+      });
 
-    // Convert result Blob → data URL
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror  = reject;
-      reader.readAsDataURL(resultBlob);
-    });
-  }, [BG_REMOVAL_CDN]);
+      // Convert result Blob → data URL
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror  = reject;
+        reader.readAsDataURL(resultBlob);
+      });
+    } finally {
+      // Always revoke to free memory
+      URL.revokeObjectURL(blobUrl);
+    }
+  }, [BG_REMOVAL_CDN, dataUrlToBlob]);
 
   const handleRemoveBg = useCallback(async () => {
     if (!uploadedDataUrl) return;
