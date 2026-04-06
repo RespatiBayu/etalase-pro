@@ -15,6 +15,9 @@ const SUPABASE_ANON_KEY =
 // Configure fal client with API key (server-side only)
 fal.config({ credentials: process.env.FAL_KEY ?? "" });
 
+// Model name — configurable via env var so future swaps need no code deploy
+const FAL_REMOVE_BG_MODEL = process.env.FAL_REMOVE_BG_MODEL ?? "fal-ai/nano-banana/edit";
+
 // Output type for fal-ai/nano-banana/edit
 interface FalImageFile {
   url: string;
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
     const uploadedUrl = await fal.storage.upload(blob as File);
 
     // ── Call nano-banana/edit to remove the background ───────────────────
-    const result = await fal.subscribe("fal-ai/nano-banana/edit", {
+    const result = await fal.subscribe(FAL_REMOVE_BG_MODEL, {
       input: {
         prompt:
           "Remove the background completely. Keep only the main product with clean edges. Make the background fully transparent.",
