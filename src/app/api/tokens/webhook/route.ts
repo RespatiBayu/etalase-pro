@@ -13,7 +13,6 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 });
 
 const SIGNING_SECRET = process.env.SCALEV_SIGNING_SECRET ?? "";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://etalase-pro.vercel.app";
 const DEFAULT_NEW_USER_TOKENS = 30; // default for new user signup (Starter Pack)
 
 // ─── Signature Verification ───────────────────────────────────────────────────
@@ -102,36 +101,34 @@ async function fetchScalevOrder(orderId: string): Promise<ScalevOrder | null> {
 
 // ─── User Provisioning ────────────────────────────────────────────────────────
 
-async function provisionNewUser(email: string, tokenAmount: number): Promise<void> {
-  // Create user + send invite email with set-password link
-  const { data: inviteData, error: inviteError } =
-    await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${APP_URL}/auth/callback?next=/set-password`,
+async function provisionNewUser(
+  email: string,
+  tokenAmount: number,
+  orderId: string
+): Promise<void> {
+  // Create account silently — no email sent until app launch
+  const { data: createData, error: createError } =
+    await supabaseAdmin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      password: crypto.randomUUID(), // random temp password; user will reset on launch
     });
 
-  if (inviteError) {
-    // If user already exists (was invited before), just ensure profile is approved
-    console.warn(`inviteUserByEmail for ${email}:`, inviteError.message);
+  if (createError) {
+    console.warn(`createUser for ${email}:`, createError.message);
   }
 
-  const userId = inviteData?.user?.id;
+  const userId = createData?.user?.id;
   if (!userId) {
     console.error(`No user ID returned for ${email}`);
     return;
   }
 
-  // Upsert profile — set approved + tokens
-  // (trigger may have already created the row; this handles both cases)
+  // Upsert profile — approved but tokens start at 0 (pending claim)
   const { error: upsertError } = await supabaseAdmin
     .from("profiles")
     .upsert(
-      {
-        id: userId,
-        email,
-        role: "user",
-        is_approved: true,
-        tokens: tokenAmount,
-      },
+      { id: userId, email, role: "user", is_approved: true, tokens: 0 },
       { onConflict: "id" }
     );
 
@@ -139,41 +136,41 @@ async function provisionNewUser(email: string, tokenAmount: number): Promise<voi
     console.error("Profile upsert failed:", upsertError);
   }
 
-  // Record transaction
-  await supabaseAdmin.from("token_transactions").insert({
+  // Store claim — tokens will be credited when user claims on first login
+  const { error: claimError } = await supabaseAdmin.from("token_claims").insert({
     user_id: userId,
-    type: "purchase",
+    order_id: orderId,
     amount: tokenAmount,
-    description: `Pembelian awal ${tokenAmount} token (akun baru)`,
+    package_name: `Pembelian ${tokenAmount} token`,
+    status: "pending",
   });
 
-  console.log(`[Webhook] New user ${email} created with ${tokenAmount} tokens`);
+  if (claimError) {
+    console.error("token_claims insert failed:", claimError);
+  }
+
+  console.log(`[Webhook] New user ${email} created, ${tokenAmount} tokens pending claim`);
 }
 
-async function addTokensToExistingUser(
+async function queueTokensForExistingUser(
   userId: string,
-  currentTokens: number,
   tokenAmount: number,
   orderId: string
 ): Promise<void> {
-  const newBalance = currentTokens + tokenAmount;
-
-  await supabaseAdmin
-    .from("profiles")
-    .update({ tokens: newBalance })
-    .eq("id", userId);
-
-  await supabaseAdmin.from("token_transactions").insert({
+  // Don't directly credit — store as pending claim so user sees it in dashboard
+  const { error: claimError } = await supabaseAdmin.from("token_claims").insert({
     user_id: userId,
-    type: "purchase",
+    order_id: orderId,
     amount: tokenAmount,
-    description: `Pembelian ${tokenAmount} token (Order ${orderId})`,
-    scalev_order_id: orderId,
+    package_name: `Pembelian ${tokenAmount} token`,
+    status: "pending",
   });
 
-  console.log(
-    `[Webhook] Added ${tokenAmount} tokens to user ${userId} (order ${orderId})`
-  );
+  if (claimError) {
+    console.error("token_claims insert failed:", claimError);
+  }
+
+  console.log(`[Webhook] Queued ${tokenAmount} tokens for user ${userId} (order ${orderId})`);
 }
 
 // ─── Webhook Payload Types ────────────────────────────────────────────────────
@@ -237,11 +234,11 @@ export async function POST(request: NextRequest) {
   const orderId = payload.data.order_id;
   console.log(`[Webhook] Processing order: ${orderId}`);
 
-  // Idempotency — skip if order already processed
+  // Idempotency — skip if order already processed (check token_claims)
   const { data: existing } = await supabaseAdmin
-    .from("token_transactions")
+    .from("token_claims")
     .select("id")
-    .eq("scalev_order_id", orderId)
+    .eq("order_id", orderId)
     .single();
 
   if (existing) {
@@ -295,17 +292,12 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (!existingProfile) {
-    // New user → create account + invite email + tokens
-    await provisionNewUser(email, tokenAmount);
+    // New user → create account silently + queue tokens as pending claim
+    await provisionNewUser(email, tokenAmount, orderId);
   } else {
-    // Existing user → top up tokens
-    await addTokensToExistingUser(
-      existingProfile.id,
-      existingProfile.tokens ?? 0,
-      tokenAmount,
-      orderId
-    );
+    // Existing user → queue tokens as pending claim
+    await queueTokensForExistingUser(existingProfile.id, tokenAmount, orderId);
   }
 
-  return NextResponse.json({ received: true, tokens_added: tokenAmount });
+  return NextResponse.json({ received: true, tokens_queued: tokenAmount });
 }

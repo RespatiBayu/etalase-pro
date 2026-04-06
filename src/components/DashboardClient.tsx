@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Zap, TrendingDown, TrendingUp, Clock, ShoppingCart, AlertCircle } from "lucide-react";
+import { Zap, TrendingDown, TrendingUp, Clock, ShoppingCart, AlertCircle, Gift, Loader2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,6 +50,17 @@ const TYPE_CONFIG = {
   bonus: { label: "Bonus", color: "text-purple-600 bg-purple-50", icon: Zap },
 } as const;
 
+// ─── Claim Banner Types ───────────────────────────────────────────────────────
+
+interface ClaimCheckResult {
+  totalPending: number;
+}
+
+interface ClaimResult {
+  claimed: number;
+  newBalance: number;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function DashboardClient() {
@@ -61,6 +72,11 @@ export function DashboardClient() {
   const [userEmail, setUserEmail] = useState("");
   const [joinDate, setJoinDate] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Claim banner state
+  const [pendingTokens, setPendingTokens] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [claimSuccess, setClaimSuccess] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -97,6 +113,13 @@ export function DashboardClient() {
       const pkgRes = await fetch("/api/tokens/packages");
       const pkgData = await pkgRes.json() as { packages?: TokenPackage[] };
       setPackages(pkgData.packages ?? []);
+
+      // Check for pending token claims
+      const claimRes = await fetch("/api/tokens/claim");
+      if (claimRes.ok) {
+        const claimData = await claimRes.json() as ClaimCheckResult;
+        setPendingTokens(claimData.totalPending ?? 0);
+      }
     } finally {
       setLoading(false);
     }
@@ -105,6 +128,32 @@ export function DashboardClient() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  const handleClaim = async () => {
+    setIsClaiming(true);
+    try {
+      const res = await fetch("/api/tokens/claim", { method: "POST" });
+      if (!res.ok) return;
+      const data = await res.json() as ClaimResult;
+      if (data.claimed > 0) {
+        setBalance(data.newBalance);
+        setPendingTokens(0);
+        setClaimSuccess(true);
+        // Refresh transaction list
+        const { data: txData } = await supabase
+          .from("token_transactions")
+          .select("id, type, amount, description, scalev_order_id, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50)
+          .returns<Transaction[]>();
+        setTransactions(txData ?? []);
+        // Auto-hide success state after 4 seconds
+        setTimeout(() => setClaimSuccess(false), 4000);
+      }
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   // Stats
   const totalBought = transactions
@@ -136,6 +185,69 @@ export function DashboardClient() {
           {userEmail} · Bergabung {joinDate}
         </p>
       </div>
+
+      {/* Claim banner */}
+      {(pendingTokens > 0 || claimSuccess) && (
+        <div
+          className={`rounded-2xl p-5 shadow-lg transition-all duration-500 ${
+            claimSuccess
+              ? "bg-gradient-to-r from-emerald-400 to-teal-400"
+              : "bg-gradient-to-r from-orange-400 to-amber-400"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                {claimSuccess ? (
+                  <CheckCircle2 size={22} className="text-white" />
+                ) : (
+                  <Gift size={22} className="text-white" />
+                )}
+              </div>
+              <div>
+                {claimSuccess ? (
+                  <>
+                    <p className="text-white font-black text-sm uppercase tracking-tight">
+                      Token Berhasil Diklaim!
+                    </p>
+                    <p className="text-white/80 text-[11px] font-medium mt-0.5">
+                      Saldo token kamu sudah diperbarui.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white font-black text-sm uppercase tracking-tight">
+                      Kamu punya {pendingTokens} token yang belum diklaim!
+                    </p>
+                    <p className="text-white/80 text-[11px] font-medium mt-0.5">
+                      Klaim sekarang untuk menambahkan ke saldo kamu.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            {!claimSuccess && (
+              <button
+                onClick={handleClaim}
+                disabled={isClaiming}
+                className="flex-shrink-0 bg-white text-orange-500 font-black text-[11px] uppercase tracking-widest px-5 py-2.5 rounded-full shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {isClaiming ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Proses...
+                  </>
+                ) : (
+                  <>
+                    <Zap size={13} />
+                    Klaim Sekarang
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 md:gap-4">
