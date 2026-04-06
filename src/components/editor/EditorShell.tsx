@@ -6,7 +6,7 @@ import {
   Download, RotateCcw, Zap, Check, Image as ImageIcon,
   AlertCircle, ChevronDown, ChevronRight, AlignLeft,
   AlignCenter, AlignRight, Bold, Italic, X, Plus,
-  Layers, Tag,
+  Layers, Tag, Save, FolderOpen, Clock, Pencil,
 } from "lucide-react";
 // Regular import is safe — FabricCanvas has "use client" and no top-level
 // fabric imports (fabric is lazy-loaded inside useEffect/handlers only).
@@ -116,6 +116,35 @@ function Section({
   );
 }
 
+// ─── Saved-state types ────────────────────────────────────────────────────────
+
+interface EditorSavedState {
+  version: 1;
+  ratio: string;
+  uploadedDataUrl: string | null;
+  processedDataUrl: string | null;
+  bgColor: string;
+  bgImageUrl: string | null;
+  headlineText: string;
+  headlineStyle: TextStyle;
+  taglineText: string;
+  taglineStyle: TextStyle;
+  logoDataUrl: string | null;
+  logoPosition: LogoPosition;
+  fiturList: string[];
+  siapkanType: string;
+  siapkanPlatform: string;
+  siapkanText: string;
+  diskonPct: string;
+}
+
+interface EditorProjectSummary {
+  id: string;
+  name: string;
+  updatedAt: string;
+  thumbnailUrl: string | null;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function EditorShell() {
@@ -176,6 +205,18 @@ export function EditorShell() {
   // ── Ratio ─────────────────────────────────────────────────────────────────
   const [ratio, setRatio]                   = useState("1:1");
   const { w, h } = CANVAS_BY_RATIO[ratio] ?? CANVAS_BY_RATIO["1:1"];
+
+  // ── Project save/load ─────────────────────────────────────────────────────
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName]           = useState("Proyek Editor");
+  const [saveStatus, setSaveStatus]             = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [showProjectsModal, setShowProjectsModal] = useState(false);
+  const [savedProjects, setSavedProjects]       = useState<EditorProjectSummary[]>([]);
+  const [loadingProjectId, setLoadingProjectId] = useState<string | null>(null);
+  const [projectsLoading, setProjectsLoading]   = useState(false);
+  // Ref used by restore effect — avoids stale-closure issues
+  const restoreStateRef = useRef<EditorSavedState | null>(null);
+  const [restoreSignal, setRestoreSignal]       = useState(0);
 
   // ── Fetch token balance ────────────────────────────────────────────────────
   useEffect(() => {
@@ -238,42 +279,13 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── AI Background Removal via Gemini API + chroma-key canvas ────────────────
+  // ── AI Background Removal via fal.ai nano-banana/edit ───────────────────────
   // Flow:
-  //   1. POST /api/editor/remove-bg  → Gemini isolates product on pure #00FF00 bg
-  //   2. chromaKeyRemove()           → canvas turns #00FF00 pixels transparent
-  // This replaces the previous @imgly/background-removal WASM approach which had
-  // unresolvable "e.replace is not a function" errors in Next.js webpack context
-  // caused by onnxruntime-web's Node.js build being resolved instead of browser.
+  //   1. POST /api/editor/remove-bg  → uploads image to fal.ai storage, calls
+  //      fal-ai/nano-banana/edit with a remove-background prompt
+  //   2. Returns a proper transparent PNG (alpha channel) — no chroma-key needed
 
-  /** Canvas chroma-key: replaces near-#00FF00 pixels with transparency */
-  const chromaKeyRemove = useCallback((dataUrl: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width  = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d")!;
-        ctx.drawImage(img, 0, 0);
-        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data  = frame.data;
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i], g = data[i + 1], b = data[i + 2];
-          // Match pure chroma-green: low R, high G, low B (with tolerance ±60)
-          if (r < 80 && g > 170 && b < 80) {
-            data[i + 3] = 0; // fully transparent
-          }
-        }
-        ctx.putImageData(frame, 0, 0);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.onerror = reject;
-      img.src = dataUrl;
-    });
-  }, []);
-
-  /** Full remove-bg pipeline: Gemini green-screen → chroma-key → transparent PNG */
+  /** Calls fal.ai nano-banana/edit to remove background → returns transparent PNG data URL */
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
     // Extract raw base64 (strip data:…;base64, prefix)
     const base64Image = sourceDataUrl.split(",")[1] ?? sourceDataUrl;
@@ -290,10 +302,9 @@ export function EditorShell() {
     }
 
     const { imageUrl } = await res.json() as { imageUrl: string };
-
-    // Remove chroma-green (#00FF00) pixels on client → transparent PNG
-    return chromaKeyRemove(imageUrl);
-  }, [chromaKeyRemove]);
+    // fal.ai returns a proper transparent PNG — use directly
+    return imageUrl;
+  }, []);
 
   const handleRemoveBg = useCallback(async () => {
     if (!uploadedDataUrl) return;
@@ -329,7 +340,8 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleLatarAI = useCallback(async () => {
+  // stylePrompt = undefined → AI auto-analyze mode; string → template mode
+  const handleLatarAI = useCallback(async (stylePrompt?: string) => {
     const imageDataUrl = processedDataUrl ?? uploadedDataUrl;
     if (!imageDataUrl) return;
     setIsGeneratingAI(true);
@@ -342,11 +354,11 @@ export function EditorShell() {
         r.onloadend = () => resolve((r.result as string).split(",")[1]);
         r.readAsDataURL(blob);
       });
-      const style = LATAR_AI_STYLES.find((s) => s.id === selectedAiStyle)!;
       const response = await fetch("/api/editor/latar-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64Image: base64, stylePrompt: style.prompt, ratio }),
+        // stylePrompt omitted when undefined → server uses auto-analyze mode
+        body: JSON.stringify({ base64Image: base64, stylePrompt, ratio }),
       });
       if (response.status === 402) {
         setAiError("Token tidak cukup. Beli token untuk menggunakan Latar AI.");
@@ -371,7 +383,7 @@ export function EditorShell() {
     } finally {
       setIsGeneratingAI(false);
     }
-  }, [processedDataUrl, uploadedDataUrl, selectedAiStyle, ratio]);
+  }, [processedDataUrl, uploadedDataUrl, ratio]);
 
   // ── Teks ───────────────────────────────────────────────────────────────────
   const applyHeadline = useCallback((text: string, style: TextStyle) => {
@@ -506,6 +518,209 @@ export function EditorShell() {
     a.click();
   }, []);
 
+  // ── Project: build save state ──────────────────────────────────────────────
+  const buildSaveState = useCallback((): EditorSavedState => ({
+    version: 1,
+    ratio,
+    uploadedDataUrl,
+    processedDataUrl,
+    bgColor,
+    bgImageUrl,
+    headlineText,
+    headlineStyle,
+    taglineText,
+    taglineStyle,
+    logoDataUrl,
+    logoPosition,
+    fiturList,
+    siapkanType,
+    siapkanPlatform,
+    siapkanText,
+    diskonPct,
+  }), [
+    ratio, uploadedDataUrl, processedDataUrl, bgColor, bgImageUrl,
+    headlineText, headlineStyle, taglineText, taglineStyle,
+    logoDataUrl, logoPosition, fiturList, siapkanType,
+    siapkanPlatform, siapkanText, diskonPct,
+  ]);
+
+  // ── Project: save ──────────────────────────────────────────────────────────
+  const handleSaveProject = useCallback(async () => {
+    setSaveStatus("saving");
+    try {
+      const state = buildSaveState();
+      const stateJson = JSON.stringify(state);
+
+      // Generate thumbnail from canvas
+      const pngDataUrl = fabricRef.current?.exportPNG() ?? null;
+      const thumbnailBase64 = pngDataUrl ? pngDataUrl.split(",")[1] : undefined;
+
+      const res = await fetch("/api/editor/projects/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: currentProjectId ?? undefined,
+          name: projectName,
+          stateJson,
+          thumbnailBase64,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Save failed");
+      const { id } = await res.json() as { id: string };
+      setCurrentProjectId(id);
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    } catch {
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    }
+  }, [buildSaveState, currentProjectId, projectName]);
+
+  // ── Project: list ──────────────────────────────────────────────────────────
+  const handleOpenProjects = useCallback(async () => {
+    setShowProjectsModal(true);
+    setProjectsLoading(true);
+    try {
+      const res = await fetch("/api/editor/projects");
+      const data = await res.json() as { projects?: EditorProjectSummary[] };
+      setSavedProjects(data.projects ?? []);
+    } catch {
+      setSavedProjects([]);
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, []);
+
+  // ── Project: load ──────────────────────────────────────────────────────────
+  const handleLoadProject = useCallback(async (id: string) => {
+    setLoadingProjectId(id);
+    try {
+      const res = await fetch(`/api/editor/projects/${id}`);
+      if (!res.ok) throw new Error("Load failed");
+      const { name, stateJson } = await res.json() as { name: string; stateJson: string };
+
+      const s: EditorSavedState = JSON.parse(stateJson);
+
+      // Store full state in ref before signalling the effect
+      restoreStateRef.current = s;
+
+      // Reset canvas overlays first
+      fabricRef.current?.removeById("headline");
+      fabricRef.current?.removeById("tagline");
+      fabricRef.current?.removeById("logo");
+      fabricRef.current?.removeById("siapkan");
+      fabricRef.current?.removeById("fitur");
+
+      // Batch-set all React state
+      setCurrentProjectId(id);
+      setProjectName(name);
+      setRatio(s.ratio);
+      setUploadedDataUrl(s.uploadedDataUrl);
+      setProcessedDataUrl(s.processedDataUrl);
+      setBgColor(s.bgColor);
+      setBgImageUrl(s.bgImageUrl);
+      setHeadlineText(s.headlineText);
+      setHeadlineStyle(s.headlineStyle);
+      setTaglineText(s.taglineText);
+      setTaglineStyle(s.taglineStyle);
+      setLogoDataUrl(s.logoDataUrl);
+      setLogoPosition(s.logoPosition);
+      setFiturList(s.fiturList);
+      setSiapkanType(s.siapkanType as typeof siapkanType);
+      setSiapkanPlatform(s.siapkanPlatform);
+      setSiapkanText(s.siapkanText);
+      setDiskonPct(s.diskonPct);
+
+      // canvasReady might need resetting if ratio changed
+      setCanvasReady(false);
+      // Signal the restore effect (fires after canvas is ready again)
+      setRestoreSignal((n) => n + 1);
+      setShowProjectsModal(false);
+    } catch {
+      // noop — keep current state
+    } finally {
+      setLoadingProjectId(null);
+    }
+  }, []);
+
+  // ── Project: delete ────────────────────────────────────────────────────────
+  const handleDeleteProject = useCallback(async (id: string) => {
+    await fetch(`/api/editor/projects/${id}`, { method: "DELETE" });
+    setSavedProjects((prev) => prev.filter((p) => p.id !== id));
+    if (currentProjectId === id) {
+      setCurrentProjectId(null);
+    }
+  }, [currentProjectId]);
+
+  // ── Restore effect: re-applies canvas overlays after project load ──────────
+  // Runs when canvasReady becomes true AND restoreSignal was incremented.
+  // We read from restoreStateRef (not stale React state closures).
+  useEffect(() => {
+    if (!restoreSignal || !canvasReady) return;
+    const s = restoreStateRef.current;
+    if (!s) return;
+    restoreStateRef.current = null;
+
+    // Background (product re-load is handled by the existing canvasReady effect)
+    if (s.bgImageUrl) {
+      fabricRef.current?.setBackgroundImage(s.bgImageUrl);
+    } else {
+      fabricRef.current?.setBackground(s.bgColor);
+    }
+
+    // Headline
+    if (s.headlineText.trim()) {
+      fabricRef.current?.setTextById("headline", { ...s.headlineStyle, text: s.headlineText, topFrac: 0.75 });
+    }
+    // Tagline
+    if (s.taglineText.trim()) {
+      fabricRef.current?.setTextById("tagline", { ...s.taglineStyle, text: s.taglineText, topFrac: 0.87 });
+    }
+    // Logo
+    if (s.logoDataUrl) {
+      fabricRef.current?.setImageById("logo", s.logoDataUrl, { position: s.logoPosition, widthFrac: 0.22 });
+    }
+    // Fitur list
+    const lines = s.fiturList.filter((f) => f.trim());
+    if (lines.length > 0) {
+      fabricRef.current?.setTextById("fitur", {
+        text: lines.map((f) => `✦ ${f}`).join("\n"),
+        fontSize: 18, fontFamily: "Inter", fontWeight: "bold",
+        fill: "#FFFFFF", textAlign: "left",
+        topFrac: 0.12, leftFrac: 0.06,
+        originX: "left", originY: "top",
+        shadow: "1px 1px 4px rgba(0,0,0,0.6)",
+      });
+    }
+    // Siapkan badge
+    if (s.siapkanType && s.siapkanPlatform) {
+      const colorMap: Record<string, string> = {
+        "Shopee": "#EE4D2D", "Tokopedia": "#00AA5B", "TikTok Shop": "#000000",
+        "Lazada": "#0F146D", "Blibli": "#0095DA",
+        "Instagram": "#E1306C", "TikTok": "#000000",
+        "Facebook": "#1877F2", "YouTube": "#FF0000", "Twitter/X": "#1DA1F2",
+      };
+      let badge = "";
+      if (s.siapkanType === "marketplace") {
+        badge = generateBadgePng(s.siapkanPlatform, s.siapkanText || "Nama Toko", colorMap[s.siapkanPlatform] ?? "#EE4D2D");
+      } else if (s.siapkanType === "sosmed") {
+        badge = generateBadgePng(s.siapkanPlatform, `@${s.siapkanText || "handle"}`, colorMap[s.siapkanPlatform] ?? "#E1306C");
+      } else if (s.siapkanType === "wa") {
+        badge = generateBadgePng("WhatsApp", s.siapkanText || "08xxxxxxxxxx", "#25D366");
+      } else if (s.siapkanType === "promo") {
+        badge = generateBadgePng("🏷️", "PROMO", "#F59E0B");
+      } else if (s.siapkanType === "diskon") {
+        badge = generateBadgePng("DISKON", `${s.diskonPct}%`, "#EF4444");
+      }
+      if (badge) {
+        fabricRef.current?.setImageById("siapkan", badge, { position: "tl", widthFrac: 0.32 });
+      }
+    }
+  // restoreSignal and canvasReady are the only deps we need — the ref carries the data
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoreSignal, canvasReady]);
+
   // ── Reset ──────────────────────────────────────────────────────────────────
   const handleReset = useCallback(() => {
     // Canvas operations first
@@ -526,6 +741,9 @@ export function EditorShell() {
     setLogoDataUrl(null);
     setFiturList(["", "", ""]);
     setAiError("");
+    setCurrentProjectId(null);
+    setProjectName("Proyek Editor");
+    setSaveStatus("idle");
   }, []);
 
   // ── Download ───────────────────────────────────────────────────────────────
@@ -548,8 +766,126 @@ export function EditorShell() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#FFF8F0]">
 
+      {/* ── Projects Modal ────────────────────────────────────────────────── */}
+      {showProjectsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-orange-900/20 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl shadow-orange-100 flex flex-col overflow-hidden max-h-[80vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-orange-100">
+              <div className="flex items-center gap-2">
+                <FolderOpen size={16} className="text-orange-400" />
+                <h2 className="font-black text-orange-900 uppercase tracking-tight text-sm">Proyek Tersimpan</h2>
+              </div>
+              <button onClick={() => setShowProjectsModal(false)}
+                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all">
+                <X size={16} />
+              </button>
+            </div>
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: "none" }}>
+              {projectsLoading ? (
+                <div className="flex items-center justify-center py-10 gap-2 text-orange-400">
+                  <Loader2 size={18} className="animate-spin" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Memuat...</span>
+                </div>
+              ) : savedProjects.length === 0 ? (
+                <div className="text-center py-10">
+                  <FolderOpen size={32} className="text-orange-200 mx-auto mb-2" />
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Belum ada proyek tersimpan</p>
+                </div>
+              ) : (
+                savedProjects.map((proj) => (
+                  <div key={proj.id}
+                    className="flex items-center gap-3 bg-orange-50/50 rounded-2xl p-3 border border-orange-100 hover:border-orange-300 transition-all">
+                    {/* Thumbnail */}
+                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-orange-100">
+                      {proj.thumbnailUrl
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={proj.thumbnailUrl} alt={proj.name} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={18} className="text-orange-200" /></div>
+                      }
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-black text-orange-900 truncate">{proj.name}</p>
+                      <p className="text-[9px] text-slate-400 flex items-center gap-1 mt-0.5">
+                        <Clock size={9} />
+                        {new Date(proj.updatedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    </div>
+                    {/* Actions */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => handleLoadProject(proj.id)}
+                        disabled={loadingProjectId === proj.id}
+                        className="px-3 py-1.5 bg-orange-400 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1">
+                        {loadingProjectId === proj.id
+                          ? <Loader2 size={10} className="animate-spin" />
+                          : "Buka"
+                        }
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProject(proj.id)}
+                        className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Left Panel ────────────────────────────────────────────────────── */}
       <div className="w-full md:w-72 flex-shrink-0 bg-white border-r border-orange-100 flex flex-col overflow-hidden">
+
+        {/* ── Project save bar ──────────────────────────────────────────── */}
+        <div className="p-3 border-b border-orange-100 bg-orange-50/30 space-y-2">
+          {/* Project name row */}
+          <div className="flex items-center gap-1.5">
+            <Pencil size={10} className="text-orange-300 flex-shrink-0" />
+            <input
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              className="flex-1 bg-transparent text-[10px] font-black text-orange-900 uppercase tracking-widest outline-none min-w-0 placeholder:text-orange-200"
+              placeholder="Nama proyek..."
+              maxLength={40}
+            />
+            {currentProjectId && (
+              <span className="text-[7px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100 flex-shrink-0">
+                Tersimpan
+              </span>
+            )}
+          </div>
+          {/* Buttons row */}
+          <div className="flex gap-1.5">
+            <button onClick={handleSaveProject} disabled={saveStatus === "saving" || !uploadedDataUrl}
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                saveStatus === "saved"
+                  ? "bg-emerald-400 text-white"
+                  : saveStatus === "error"
+                  ? "bg-rose-400 text-white"
+                  : saveStatus === "saving" || !uploadedDataUrl
+                  ? "bg-orange-100 text-orange-300 cursor-not-allowed"
+                  : "bg-orange-400 text-white hover:bg-orange-500 active:scale-95"
+              }`}>
+              {saveStatus === "saving"
+                ? <><Loader2 size={10} className="animate-spin" /> Menyimpan...</>
+                : saveStatus === "saved"
+                ? <><Check size={10} /> Tersimpan!</>
+                : saveStatus === "error"
+                ? "Gagal"
+                : <><Save size={10} /> Simpan</>
+              }
+            </button>
+            <button onClick={handleOpenProjects}
+              className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest bg-white border border-orange-200 text-orange-500 hover:bg-orange-50 hover:border-orange-400 active:scale-95 transition-all">
+              <FolderOpen size={10} /> Buka
+            </button>
+          </div>
+        </div>
 
         {/* Mode tabs */}
         <div className="flex border-b border-orange-100">
@@ -632,7 +968,7 @@ export function EditorShell() {
                   }`}>{removeStatus}</p>
                 )}
                 <p className="text-[8px] text-slate-400 text-center">
-                  Diproses oleh AI Gemini. Cocok untuk semua jenis background.
+                  Diproses oleh fal.ai. Cocok untuk semua jenis background.
                 </p>
               </Section>
 
@@ -677,12 +1013,57 @@ export function EditorShell() {
                   </div>
                 )}
 
-                {/* AI */}
+                {/* AI — auto-analyze & generate */}
                 {bgSubTab === "ai" && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-100">
                       <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
                         <Zap size={10} className="text-orange-400" /> Latar AI
+                      </span>
+                      <span className="text-[9px] text-orange-400 font-bold">
+                        1 token / generate {tokenBalance !== null ? `· sisa ${tokenBalance}` : ""}
+                      </span>
+                    </div>
+                    {/* Description */}
+                    <div className="bg-orange-50/60 border border-orange-100 rounded-xl p-3 space-y-1">
+                      <p className="text-[9px] font-black text-orange-800 leading-tight">✦ AI Analisa Otomatis</p>
+                      <p className="text-[8px] text-slate-500 leading-relaxed">
+                        AI akan menganalisa produkmu secara otomatis dan memilih latar yang paling cocok tanpa perlu pilih gaya manual.
+                      </p>
+                    </div>
+                    {aiError && (
+                      <div className="flex items-start gap-1.5 bg-rose-50 border border-rose-100 rounded-xl p-2">
+                        <AlertCircle size={11} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                        <p className="text-[8px] text-rose-600 font-bold leading-tight">{aiError}</p>
+                      </div>
+                    )}
+                    {aiError.includes("Token") && (
+                      <a href="/dashboard"
+                        className="flex items-center justify-center gap-1 w-full py-2 rounded-xl bg-orange-400 text-white text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">
+                        <Zap size={10} /> Beli Token
+                      </a>
+                    )}
+                    {/* Auto-generate: no stylePrompt passed → server auto-analyzes */}
+                    <button onClick={() => handleLatarAI()} disabled={isGeneratingAI || !uploadedDataUrl}
+                      className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                        isGeneratingAI || !uploadedDataUrl
+                          ? "bg-orange-100 text-orange-300 cursor-not-allowed"
+                          : "bg-orange-400 text-white shadow-lg shadow-orange-100 hover:bg-orange-500 active:scale-95"
+                      }`}>
+                      {isGeneratingAI
+                        ? <><Loader2 size={11} className="animate-spin" /> Menganalisa...</>
+                        : <><Wand2 size={11} /> Generate Otomatis</>
+                      }
+                    </button>
+                  </div>
+                )}
+
+                {/* Template — 6 style cards (Suasana, Meja Dapur, dll.) */}
+                {bgSubTab === "template" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-100">
+                      <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
+                        <Layers size={10} className="text-orange-400" /> Pilih Gaya
                       </span>
                       <span className="text-[9px] text-orange-400 font-bold">
                         1 token / generate {tokenBalance !== null ? `· sisa ${tokenBalance}` : ""}
@@ -713,7 +1094,13 @@ export function EditorShell() {
                         <Zap size={10} /> Beli Token
                       </a>
                     )}
-                    <button onClick={handleLatarAI} disabled={isGeneratingAI || !uploadedDataUrl}
+                    {/* Template mode: pass selected style's prompt */}
+                    <button
+                      onClick={() => {
+                        const style = LATAR_AI_STYLES.find((s) => s.id === selectedAiStyle);
+                        if (style) handleLatarAI(style.prompt);
+                      }}
+                      disabled={isGeneratingAI || !uploadedDataUrl}
                       className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
                         isGeneratingAI || !uploadedDataUrl
                           ? "bg-orange-100 text-orange-300 cursor-not-allowed"
@@ -721,32 +1108,9 @@ export function EditorShell() {
                       }`}>
                       {isGeneratingAI
                         ? <><Loader2 size={11} className="animate-spin" /> Generating...</>
-                        : <><Wand2 size={11} /> Generate Latar AI</>
+                        : <><Wand2 size={11} /> Generate Template</>
                       }
                     </button>
-                  </div>
-                )}
-
-                {/* Template */}
-                {bgSubTab === "template" && (
-                  <div className="space-y-2">
-                    <p className="text-[8px] text-slate-400">Pilih gaya latar template:</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        { name: "Studio Putih", bg: "linear-gradient(135deg,#f8f8f8,#e8e8e8)", hex: "#F0F0F0" },
-                        { name: "Dark Elegant", bg: "linear-gradient(135deg,#1a1a1a,#2d2d2d)", hex: "#1A1A1A" },
-                        { name: "Pastel Pink",  bg: "linear-gradient(135deg,#fce7f3,#f9a8d4)", hex: "#FCE7F3" },
-                        { name: "Ocean Blue",  bg: "linear-gradient(135deg,#dbeafe,#93c5fd)", hex: "#DBEAFE" },
-                        { name: "Nature Green",bg: "linear-gradient(135deg,#dcfce7,#86efac)", hex: "#DCFCE7" },
-                        { name: "Warm Gold",   bg: "linear-gradient(135deg,#fef9c3,#fde68a)", hex: "#FEF9C3" },
-                      ].map((t) => (
-                        <button key={t.name} onClick={() => applyBgColor(t.hex)}
-                          className="p-2 rounded-xl border-2 border-orange-100 hover:border-orange-300 transition-all text-center overflow-hidden">
-                          <div className="aspect-video rounded-lg mb-1" style={{ background: t.bg }} />
-                          <p className="text-[8px] font-bold text-slate-600 truncate">{t.name}</p>
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 )}
 

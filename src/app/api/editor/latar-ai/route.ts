@@ -72,12 +72,23 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Build prompt ──────────────────────────────────────────────────────────
+  // Auto-mode: no stylePrompt → AI analyzes product and picks best background
+  const autoModeInstruction = `
+First, analyze what product is shown in the image (category, color palette, style/tone, target market).
+Then, select the most fitting background environment that would make this product look premium and appealing for Indonesian e-commerce.
+Choose a background style that naturally complements the product's aesthetics, color, and target audience.
+`.trim();
+
+  const styleInstruction = stylePrompt
+    ? `STYLE: ${stylePrompt}`
+    : `STYLE INSTRUCTION (Auto Mode):\n${autoModeInstruction}`;
+
   const prompt = `
 You are a professional e-commerce product photographer.
 
 TASK: Transform the product photo into a high-end marketing visual.
 
-STYLE: ${stylePrompt ?? "Clean white studio background, professional product photography."}
+${styleInstruction}
 
 RULES:
 1. Keep the product as the clear hero of the image.
