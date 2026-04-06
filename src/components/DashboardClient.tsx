@@ -297,6 +297,59 @@ export function DashboardClient() {
         <p className="text-[10px] font-black uppercase tracking-widest text-orange-300 mb-4">
           Isi Token
         </p>
+
+        {/* Persistent claim section — stays visible until claimed */}
+        {(pendingTokens > 0 || claimSuccess) && (
+          <div className={`rounded-2xl p-4 mb-5 border-2 transition-all duration-500 ${
+            claimSuccess
+              ? "bg-emerald-50 border-emerald-200"
+              : "bg-amber-50 border-amber-200"
+          }`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  claimSuccess ? "bg-emerald-100" : "bg-amber-100"
+                }`}>
+                  {claimSuccess
+                    ? <CheckCircle2 size={20} className="text-emerald-600" />
+                    : <Gift size={20} className="text-amber-600" />
+                  }
+                </div>
+                <div>
+                  {claimSuccess ? (
+                    <>
+                      <p className="text-emerald-800 font-black text-sm uppercase tracking-tight">Token Berhasil Diklaim!</p>
+                      <p className="text-emerald-600 text-[10px] font-medium mt-0.5">Saldo kamu sudah diperbarui.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-amber-800 font-black text-sm uppercase tracking-tight">
+                        {pendingTokens} Token Menunggu Diklaim
+                      </p>
+                      <p className="text-amber-600 text-[10px] font-medium mt-0.5">
+                        Dari pembelian yang sudah kamu lakukan.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+              {!claimSuccess && (
+                <button
+                  onClick={handleClaim}
+                  disabled={isClaiming}
+                  className="flex-shrink-0 bg-amber-400 hover:bg-amber-500 text-white font-black text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-full shadow-md hover:scale-105 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {isClaiming ? (
+                    <><Loader2 size={12} className="animate-spin" /> Proses...</>
+                  ) : (
+                    <><Zap size={12} /> Klaim Token</>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {packages.length === 0 ? (
           <div className="flex items-center gap-2 text-slate-400 text-sm">
             <AlertCircle size={16} />
