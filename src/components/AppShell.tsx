@@ -61,6 +61,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (user?.email) setUserEmail(user.email);
     });
     refreshTokenBalance();
+
+    // Listen for token balance updates dispatched by other components (e.g. after claim)
+    const handler = () => refreshTokenBalance();
+    window.addEventListener("tokenbalance:updated", handler);
+    return () => window.removeEventListener("tokenbalance:updated", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

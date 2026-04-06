@@ -139,6 +139,8 @@ export function DashboardClient() {
         setBalance(data.newBalance);
         setPendingTokens(0);
         setClaimSuccess(true);
+        // Notify AppShell sidebar to refresh its token balance display
+        window.dispatchEvent(new CustomEvent("tokenbalance:updated"));
         // Refresh transaction list
         const { data: txData } = await supabase
           .from("token_transactions")
