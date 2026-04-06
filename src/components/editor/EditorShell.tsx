@@ -280,30 +280,15 @@ export function EditorShell() {
   }, []);
 
   // ── AI Background Removal — 100% client-side, zero cost ────────────────────
-  // Library (@imgly/background-removal) is imported at runtime directly from
-  // jsDelivr CDN using a native browser dynamic import.
-  //
-  // WHY CDN import instead of npm bundle:
-  //   When bundled by webpack, onnxruntime-web (used internally) resolves to its
-  //   Node.js build → "e.replace is not a function" at runtime.
-  //   Loading from CDN bypasses webpack entirely — the browser's own ES module
-  //   loader handles it, so onnxruntime-web and its WASM files load correctly.
-  //
-  // /* webpackIgnore: true */ tells webpack to leave the import as-is.
-  // The model (~40 MB) is fetched from imgly's CDN and cached by the browser —
+  // Uses @imgly/background-removal (installed npm package).
+  // next.config.mjs aliases onnxruntime-web → ort.bundle.min.mjs (browser build)
+  // so the "e.replace is not a function" onnxruntime Node.js build error is fixed.
+  // The ONNX model (~40 MB) is fetched from imgly's CDN and cached in IndexedDB —
   // subsequent calls are instant.
 
-  type ImglyModule = {
-    removeBackground: (src: string | Blob | File) => Promise<Blob>;
-  };
-
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    // Dynamic CDN import — webpack won't touch this.
-    // URL is stored in a variable so TypeScript doesn't try to resolve it as
-    // a local module path; webpackIgnore: true prevents webpack static analysis.
-    const cdnUrl = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/browser.es.js";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { removeBackground } = await (import(/* webpackIgnore: true */ cdnUrl) as Promise<any>) as ImglyModule;
+    // Lazy import so the heavy bundle is only loaded when the user clicks the button.
+    const { removeBackground } = await import("@imgly/background-removal");
 
     const resultBlob = await removeBackground(sourceDataUrl);
 

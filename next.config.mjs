@@ -51,10 +51,19 @@ const nextConfig = {
       };
     }
 
-    // Suppress "Critical dependency: require function" warnings from onnxruntime
+    // Suppress "Critical dependency: require function" warnings from onnxruntime-web
+    // (internal dynamic requires inside pre-built ort bundles — harmless in browser)
     config.ignoreWarnings = [
       ...(config.ignoreWarnings ?? []),
       /Critical dependency.*onnxruntime/,
+      (w) => {
+        const msg = w.message ?? "";
+        const mod = (w.module?.identifier?.() ?? w.module?.resource ?? "");
+        return (
+          msg.includes("Critical dependency") &&
+          (mod.includes("onnxruntime") || mod.includes("ort."))
+        );
+      },
     ];
 
     return config;
