@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import { generateImage } from "@/lib/gemini";
+import { uploadToFal, generateWithFal } from "@/lib/fal";
 
-export const maxDuration = 60;
+// fal.ai calls can take up to 120s
+export const maxDuration = 120;
 
 // ─── Supabase clients ─────────────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Build prompt ──────────────────────────────────────────────────────────
-  // Auto-mode: no stylePrompt → AI analyzes product and picks best background
+  // Auto-mode (no stylePrompt): AI analyzes product and picks best background
   const autoModeInstruction = `
 First, analyze what product is shown in the image (category, color palette, style/tone, target market).
 Then, select the most fitting background environment that would make this product look premium and appealing for Indonesian e-commerce.
@@ -100,9 +101,10 @@ RULES:
 7. Ultra-high resolution, 8k, extreme sharpness.
 `.trim();
 
-  // ── Generate image ────────────────────────────────────────────────────────
+  // ── Upload image to fal.ai storage, then generate ─────────────────────────
   try {
-    const { imageBase64 } = await generateImage(prompt, base64Image);
+    const imageUrl = await uploadToFal(base64Image);
+    const imageBase64 = await generateWithFal(prompt, [imageUrl]);
 
     // ── Deduct 1 token ────────────────────────────────────────────────────
     await supabaseAdmin
