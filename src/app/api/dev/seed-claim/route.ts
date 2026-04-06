@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       type: "magiclink",
       email,
       options: {
-        redirectTo: `${APP_URL}/auth/callback?next=/dashboard`,
+        redirectTo: `${APP_URL}/auth/confirm?next=/dashboard`,
       },
     });
 

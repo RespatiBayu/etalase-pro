@@ -33,8 +33,9 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     pathname === "/" ||                        // landing page (public)
     pathname.startsWith("/login") ||
-    pathname.startsWith("/auth") ||
+    pathname.startsWith("/auth") ||            // includes /auth/confirm, /auth/callback
     pathname.startsWith("/set-password") ||
+    pathname.startsWith("/admin") ||           // admin has its own secret protection
     pathname.startsWith("/api/");              // API routes handle their own auth
 
   // Redirect unauthenticated users to /login
