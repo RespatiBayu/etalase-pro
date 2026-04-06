@@ -1,23 +1,30 @@
 /**
  * POST /api/dev/seed-claim
  *
- * Simulates a Scalev purchase for testing the full claim flow
+ * Simulates a Scalev purchase AND returns a one-time magic login link
+ * so you can test the full flow (create user → login → claim tokens)
  * without going through the actual payment gateway.
  *
- * Protected by SCALEV_SIGNING_SECRET header so it's safe in production.
+ * Protected by x-dev-secret: <SCALEV_SIGNING_SECRET> header.
  *
- * Usage (curl):
- *   curl -X POST https://etalase-pro.vercel.app/api/dev/seed-claim \
- *     -H "Content-Type: application/json" \
- *     -H "x-dev-secret: <SCALEV_SIGNING_SECRET>" \
- *     -d '{"email":"test@example.com","amount":30,"order_id":"TEST-001"}'
+ * Usage from browser DevTools console:
  *
- * Or from browser fetch (Vercel logs / DevTools):
  *   fetch('/api/dev/seed-claim', {
  *     method: 'POST',
- *     headers: { 'Content-Type': 'application/json', 'x-dev-secret': '<secret>' },
- *     body: JSON.stringify({ email: 'you@email.com', amount: 30 })
- *   }).then(r => r.json()).then(console.log)
+ *     headers: {
+ *       'Content-Type': 'application/json',
+ *       'x-dev-secret': 'ISI_SCALEV_SIGNING_SECRET_KAMU'
+ *     },
+ *     body: JSON.stringify({
+ *       email: 'test@gmail.com',   // email user yang mau ditest
+ *       amount: 30,                // jumlah token pending (default 30)
+ *       order_id: 'TEST-001'       // opsional, auto-generate jika kosong
+ *     })
+ *   }).then(r => r.json()).then(d => {
+ *     console.log(d);
+ *     // Buka d.magic_link di browser untuk langsung login sebagai user itu
+ *     if (d.magic_link) window.open(d.magic_link, '_blank');
+ *   });
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,6 +36,7 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ?? "placeholder_key";
 const DEV_SECRET = process.env.SCALEV_SIGNING_SECRET ?? "";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://etalase-pro.vercel.app";
 
 const supabaseAdmin = createAdminClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -65,6 +73,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   let userId: string;
+  let isNewUser = false;
 
   if (!profileData) {
     // Create new user silently (same as webhook flow)
@@ -83,6 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     userId = createData.user.id;
+    isNewUser = true;
 
     // Upsert profile
     await supabaseAdmin.from("profiles").upsert(
@@ -103,22 +113,40 @@ export async function POST(request: NextRequest) {
   });
 
   if (claimError) {
-    // UNIQUE violation = order already exists
     if (claimError.code === "23505") {
       return NextResponse.json(
-        { error: `Order ID "${orderId}" already exists. Use a different order_id.` },
+        { error: `Order ID "${orderId}" sudah dipakai. Gunakan order_id yang berbeda.` },
         { status: 409 }
       );
     }
     return NextResponse.json({ error: claimError.message }, { status: 500 });
   }
 
+  // ── Generate magic login link (one-time, expires in 1 hour) ──────────────
+  // User bisa langsung klik link ini untuk login tanpa password
+  const { data: linkData, error: linkError } =
+    await supabaseAdmin.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: {
+        redirectTo: `${APP_URL}/auth/callback?next=/dashboard`,
+      },
+    });
+
+  const magicLink = !linkError
+    ? linkData?.properties?.action_link ?? null
+    : null;
+
   return NextResponse.json({
     ok: true,
+    is_new_user: isNewUser,
     user_id: userId,
     email,
     order_id: orderId,
-    amount,
-    note: "Pending claim created. User can now log in and claim tokens from dashboard.",
+    tokens_pending: amount,
+    magic_link: magicLink,
+    note: magicLink
+      ? "Buka magic_link di browser untuk login langsung sebagai user ini."
+      : "Tidak bisa generate magic link. Login manual via /login.",
   });
 }
