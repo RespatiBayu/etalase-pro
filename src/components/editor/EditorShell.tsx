@@ -279,37 +279,47 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── AI Background Removal via fal.ai nano-banana/edit ───────────────────────
-  // Flow:
-  //   1. POST /api/editor/remove-bg  → uploads image to fal.ai storage, calls
-  //      fal-ai/nano-banana/edit with a remove-background prompt
-  //   2. Returns a proper transparent PNG (alpha channel) — no chroma-key needed
+  // ── AI Background Removal — 100% client-side, zero cost ────────────────────
+  // Library (@imgly/background-removal) is imported at runtime directly from
+  // jsDelivr CDN using a native browser dynamic import.
+  //
+  // WHY CDN import instead of npm bundle:
+  //   When bundled by webpack, onnxruntime-web (used internally) resolves to its
+  //   Node.js build → "e.replace is not a function" at runtime.
+  //   Loading from CDN bypasses webpack entirely — the browser's own ES module
+  //   loader handles it, so onnxruntime-web and its WASM files load correctly.
+  //
+  // /* webpackIgnore: true */ tells webpack to leave the import as-is.
+  // The model (~40 MB) is fetched from imgly's CDN and cached by the browser —
+  // subsequent calls are instant.
 
-  /** Calls fal.ai nano-banana/edit to remove background → returns transparent PNG data URL */
+  type ImglyModule = {
+    removeBackground: (src: string | Blob | File) => Promise<Blob>;
+  };
+
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    // Extract raw base64 (strip data:…;base64, prefix)
-    const base64Image = sourceDataUrl.split(",")[1] ?? sourceDataUrl;
+    // Dynamic CDN import — webpack won't touch this.
+    // URL is stored in a variable so TypeScript doesn't try to resolve it as
+    // a local module path; webpackIgnore: true prevents webpack static analysis.
+    const cdnUrl = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/browser.es.js";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { removeBackground } = await (import(/* webpackIgnore: true */ cdnUrl) as Promise<any>) as ImglyModule;
 
-    const res = await fetch("/api/editor/remove-bg", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ base64Image }),
+    const resultBlob = await removeBackground(sourceDataUrl);
+
+    // Convert Blob → data URL so FabricCanvas can use it as img.src
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror  = reject;
+      reader.readAsDataURL(resultBlob);
     });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as { error?: string };
-      throw new Error(body.error ?? `Server error ${res.status}`);
-    }
-
-    const { imageUrl } = await res.json() as { imageUrl: string };
-    // fal.ai returns a proper transparent PNG — use directly
-    return imageUrl;
   }, []);
 
   const handleRemoveBg = useCallback(async () => {
     if (!uploadedDataUrl) return;
     setIsRemoving(true);
-    setRemoveStatus("AI memproses gambar...");
+    setRemoveStatus("Memuat model AI... (pertama kali ~40 MB)");
     try {
       const result = await runAiRemoval(uploadedDataUrl);
       setProcessedDataUrl(result);
@@ -968,7 +978,7 @@ export function EditorShell() {
                   }`}>{removeStatus}</p>
                 )}
                 <p className="text-[8px] text-slate-400 text-center">
-                  Diproses oleh fal.ai. Cocok untuk semua jenis background.
+                  Diproses di browser kamu. Load pertama ~40 MB, berikutnya instan.
                 </p>
               </Section>
 
