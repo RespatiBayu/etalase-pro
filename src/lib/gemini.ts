@@ -1,12 +1,22 @@
 // Server-side only — never import this from client components
 
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+// API version — Google occasionally moves models between v1beta and v1.
+// Override via GEMINI_API_VERSION if needed.
+const API_VERSION = process.env.GEMINI_API_VERSION ?? "v1beta";
+const GEMINI_API_BASE = `https://generativelanguage.googleapis.com/${API_VERSION}/models`;
 
-// Model names — override via env vars if Google changes the model IDs.
-// GEMINI_IMAGE_MODEL: must support responseModalities: ['TEXT', 'IMAGE']
-// GEMINI_TEXT_MODEL:  text-only generateContent
+// ── Model names ────────────────────────────────────────────────────────────────
+// Override via Vercel env vars when Google renames/deprecates a model.
+// Check available models: https://ai.google.dev/gemini-api/docs/models
+//
+// GEMINI_IMAGE_MODEL — must support responseModalities: ['TEXT', 'IMAGE']
+//   Current default: gemini-2.0-flash-preview-image-generation
+//   Fallbacks to try: gemini-2.0-flash, gemini-2.5-flash-preview-04-17
+//
+// GEMINI_TEXT_MODEL  — text-only generateContent (vision input supported)
+//   Current default: gemini-2.0-flash
 const IMAGE_MODEL =
-  process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.0-flash-exp";
+  process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.0-flash-preview-image-generation";
 const TEXT_MODEL =
   process.env.GEMINI_TEXT_MODEL  ?? "gemini-2.0-flash";
 
