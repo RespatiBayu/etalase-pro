@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Terminal,
   Copy,
@@ -10,7 +10,9 @@ import {
   Wand2,
   ChevronRight,
   ExternalLink,
+  Zap,
 } from "lucide-react";
+import Link from "next/link";
 import { useProject } from "@/context/ProjectContext";
 import { getFullPromptsForPreview } from "@/lib/prompt-builder";
 import type { FashionStyleName } from "@/types";
@@ -62,6 +64,14 @@ export function Step4Preview() {
   } = useProject();
 
   const [isCopied, setIsCopied] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/tokens/balance")
+      .then((r) => r.json())
+      .then((d: { tokens?: number }) => setTokenBalance(d.tokens ?? 0))
+      .catch(() => {});
+  }, []);
 
   if (!selectedCategory) return null;
 
@@ -229,20 +239,39 @@ export function Step4Preview() {
               <h3 className="font-black italic text-orange-900 text-lg uppercase tracking-tight">
                 GENERATE DI APLIKASI
               </h3>
-              <p className="text-[9px] font-bold text-rose-500 max-w-[200px] mx-auto leading-tight">
-                (Fitur dapat mengalami pembatasan sewaktu-waktu sesuai kebijakan layanan)
-              </p>
+              {tokenBalance !== null && tokenBalance === 0 ? (
+                <p className="text-[9px] font-bold text-rose-500 max-w-[200px] mx-auto leading-tight">
+                  Token habis — beli dulu untuk generate
+                </p>
+              ) : (
+                <p className="text-[9px] font-bold text-rose-500 max-w-[200px] mx-auto leading-tight">
+                  (Fitur dapat mengalami pembatasan sewaktu-waktu sesuai kebijakan layanan)
+                </p>
+              )}
             </div>
-            <button
-              onClick={handleGenerateInApp}
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 text-white font-black italic uppercase tracking-widest shadow-xl shadow-orange-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group relative"
-            >
-              GENERATE FOTO{" "}
-              <ChevronRight
-                size={16}
-                className="group-hover:translate-x-1 transition-transform"
-              />
-            </button>
+
+            {tokenBalance !== null && tokenBalance === 0 ? (
+              <Link
+                href="/dashboard"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 text-white font-black italic uppercase tracking-widest shadow-xl shadow-orange-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group relative"
+              >
+                <Zap size={16} className="flex-shrink-0" />
+                Beli Token
+              </Link>
+            ) : (
+              <button
+                onClick={handleGenerateInApp}
+                disabled={tokenBalance === null}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 text-white font-black italic uppercase tracking-widest shadow-xl shadow-orange-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group relative disabled:opacity-50 disabled:cursor-wait"
+              >
+                <Zap size={15} className="text-amber-200 flex-shrink-0" />
+                GENERATE FOTO{" "}
+                <ChevronRight
+                  size={16}
+                  className="group-hover:translate-x-1 transition-transform"
+                />
+              </button>
+            )}
           </div>
         </div>
       </div>

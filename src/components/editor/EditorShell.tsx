@@ -156,6 +156,9 @@ export function EditorShell() {
   const [processedDataUrl, setProcessedDataUrl]   = useState<string | null>(null);
   const [isRemoving, setIsRemoving]               = useState(false);
   const [removeStatus, setRemoveStatus]           = useState("");
+  const removeStartTimeRef                        = useRef<number | null>(null);
+  const removeTimerRef                            = useRef<NodeJS.Timeout | null>(null);
+  const [removeElapsed, setRemoveElapsed]         = useState(0);
 
   // ── Mode: satuan | batch ───────────────────────────────────────────────────
   const [mode, setMode] = useState<"satuan" | "batch">("satuan");
@@ -226,6 +229,15 @@ export function EditorShell() {
       .catch(() => {});
   }, []);
 
+  // ── Cleanup remove-bg timer on unmount ─────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (removeTimerRef.current) {
+        clearInterval(removeTimerRef.current);
+      }
+    };
+  }, []);
+
   // ── Canvas lifecycle ────────────────────────────────────────────────────────
   const activeDataUrl = processedDataUrl ?? uploadedDataUrl;
 
@@ -279,42 +291,101 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── AI Background Removal — 100% client-side, zero cost ────────────────────
-  // Uses @imgly/background-removal (installed npm package).
-  // next.config.mjs aliases onnxruntime-web → ort.bundle.min.mjs (browser build)
-  // so the "e.replace is not a function" onnxruntime Node.js build error is fixed.
-  // The ONNX model (~40 MB) is fetched from imgly's CDN and cached in IndexedDB —
-  // subsequent calls are instant.
+  // ── AI Background Removal — server-side via fal.ai ────────────────────────
+  // Uses /api/editor/remove-bg which calls fal.ai nano-banana/edit model.
+  // Previously tried client-side @imgly/background-removal but onnxruntime-web
+  // ships dynamic require() calls that webpack cannot bundle correctly,
+  // causing "e.replace is not a function" errors at runtime.
 
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    // Lazy import so the heavy bundle is only loaded when the user clicks the button.
-    const { removeBackground } = await import("@imgly/background-removal");
+    console.log("[remove-bg] Starting server-side removal...");
 
-    const resultBlob = await removeBackground(sourceDataUrl);
+    // Extract base64 portion from data URL
+    const base64Image = sourceDataUrl.split(",")[1];
+    if (!base64Image) {
+      throw new Error("Gambar tidak valid. Coba upload ulang.");
+    }
 
-    // Convert Blob → data URL so FabricCanvas can use it as img.src
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror  = reject;
-      reader.readAsDataURL(resultBlob);
-    });
+    // 120s timeout safety
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+    try {
+      const response = await fetch("/api/editor/remove-bg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64Image }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errData = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error || `Gagal memproses (${response.status})`);
+      }
+
+      const data = (await response.json()) as { imageUrl?: string };
+      if (!data.imageUrl) {
+        throw new Error("Tidak ada hasil dari server.");
+      }
+
+      console.log("[remove-bg] Server returned image, size:", data.imageUrl.length);
+      return data.imageUrl;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("Timeout: Proses terlalu lama (>120s). Coba lagi.");
+      }
+      throw err;
+    }
   }, []);
 
   const handleRemoveBg = useCallback(async () => {
-    if (!uploadedDataUrl) return;
+    if (!uploadedDataUrl) {
+      console.warn("[remove-bg] No uploaded image");
+      return;
+    }
+    
     setIsRemoving(true);
-    setRemoveStatus("Memuat model AI... (pertama kali ~40 MB)");
+    setRemoveElapsed(0);
+    removeStartTimeRef.current = Date.now();
+    setRemoveStatus("Memproses di server AI...");
+    console.log("[remove-bg] Starting removal process");
+    
+    // Update elapsed time every 500ms
+    if (removeTimerRef.current) clearInterval(removeTimerRef.current);
+    removeTimerRef.current = setInterval(() => {
+      if (removeStartTimeRef.current) {
+        const elapsed = Math.floor((Date.now() - removeStartTimeRef.current) / 1000);
+        setRemoveElapsed(elapsed);
+      }
+    }, 500);
+    
     try {
       const result = await runAiRemoval(uploadedDataUrl);
+      if (!result) {
+        throw new Error("No result returned from processing");
+      }
       setProcessedDataUrl(result);
       setRemoveStatus("Selesai!");
+      console.log("[remove-bg] Success!");
     } catch (err) {
-      console.error("[remove-bg]", err);
-      setRemoveStatus(err instanceof Error ? err.message : "Gagal. Coba lagi.");
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[remove-bg] Error:", errMsg);
+      setRemoveStatus(
+        errMsg.includes("Timeout") || errMsg.includes("lama")
+          ? "Terlalu lama. Coba refresh halaman."
+          : errMsg.length > 50
+          ? "Gagal memproses. Coba upload gambar lain."
+          : errMsg || "Gagal. Coba lagi."
+      );
     } finally {
       setIsRemoving(false);
-      setTimeout(() => setRemoveStatus(""), 4000);
+      if (removeTimerRef.current) clearInterval(removeTimerRef.current);
+      removeStartTimeRef.current = null;
+      setRemoveElapsed(0);
+      setTimeout(() => setRemoveStatus(""), 5000);
     }
   }, [uploadedDataUrl, runAiRemoval]);
 
@@ -950,7 +1021,7 @@ export function EditorShell() {
                       : "bg-orange-400 text-white shadow-lg shadow-orange-100 hover:bg-orange-500 active:scale-95"
                   }`}>
                   {isRemoving
-                    ? <><Loader2 size={11} className="animate-spin" /> {removeStatus || "Memproses..."}</>
+                    ? <><Loader2 size={11} className="animate-spin" /> {removeStatus || `Memproses... (${removeElapsed}s)`}</>
                     : processedDataUrl
                     ? <><Check size={11} /> Background Dihapus</>
                     : <><Wand2 size={11} /> Hapus Background</>
@@ -963,7 +1034,7 @@ export function EditorShell() {
                   }`}>{removeStatus}</p>
                 )}
                 <p className="text-[8px] text-slate-400 text-center">
-                  Diproses di browser kamu. Load pertama ~40 MB, berikutnya instan.
+                  Diproses di server AI. Hasil edge presisi & gratis.
                 </p>
               </Section>
 
@@ -1032,16 +1103,16 @@ export function EditorShell() {
                         <p className="text-[8px] text-rose-600 font-bold leading-tight">{aiError}</p>
                       </div>
                     )}
-                    {aiError.includes("Token") && (
+                    {(aiError.includes("Token") || (tokenBalance !== null && tokenBalance === 0)) && (
                       <a href="/dashboard"
                         className="flex items-center justify-center gap-1 w-full py-2 rounded-xl bg-orange-400 text-white text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">
                         <Zap size={10} /> Beli Token
                       </a>
                     )}
                     {/* Auto-generate: no stylePrompt passed → server auto-analyzes */}
-                    <button onClick={() => handleLatarAI()} disabled={isGeneratingAI || !uploadedDataUrl}
+                    <button onClick={() => handleLatarAI()} disabled={isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)}
                       className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                        isGeneratingAI || !uploadedDataUrl
+                        isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)
                           ? "bg-orange-100 text-orange-300 cursor-not-allowed"
                           : "bg-orange-400 text-white shadow-lg shadow-orange-100 hover:bg-orange-500 active:scale-95"
                       }`}>
@@ -1083,7 +1154,7 @@ export function EditorShell() {
                         <p className="text-[8px] text-rose-600 font-bold leading-tight">{aiError}</p>
                       </div>
                     )}
-                    {aiError.includes("Token") && (
+                    {(aiError.includes("Token") || (tokenBalance !== null && tokenBalance === 0)) && (
                       <a href="/dashboard"
                         className="flex items-center justify-center gap-1 w-full py-2 rounded-xl bg-orange-400 text-white text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">
                         <Zap size={10} /> Beli Token
@@ -1095,9 +1166,9 @@ export function EditorShell() {
                         const style = LATAR_AI_STYLES.find((s) => s.id === selectedAiStyle);
                         if (style) handleLatarAI(style.prompt);
                       }}
-                      disabled={isGeneratingAI || !uploadedDataUrl}
+                      disabled={isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)}
                       className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                        isGeneratingAI || !uploadedDataUrl
+                        isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)
                           ? "bg-orange-100 text-orange-300 cursor-not-allowed"
                           : "bg-orange-400 text-white shadow-lg shadow-orange-100 hover:bg-orange-500 active:scale-95"
                       }`}>

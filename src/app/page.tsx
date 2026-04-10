@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { LandingPage } from "@/components/LandingPage";
 
 export default async function HomePage() {
   const supabase = createClient();
@@ -10,8 +9,9 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Authenticated users go straight to the app
-  if (user) redirect("/pro");
+  // Authenticated users go to dashboard
+  if (user) redirect("/dashboard");
 
-  return <LandingPage />;
+  // Unauthenticated users go to login (no public landing page yet)
+  redirect("/login");
 }

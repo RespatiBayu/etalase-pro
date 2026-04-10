@@ -24,18 +24,21 @@ const NAV_MAIN = [
     label: "Etalase Pro",
     icon: ShoppingBag,
     available: true,
+    requiresToken: true,   // costs 1 token per generate
   },
   {
     href: "/editor",
     label: "Foto Editor",
     icon: ImageIcon,
     available: true,
+    requiresToken: true,   // Latar AI costs 1 token per generate
   },
   {
     href: "/history",
     label: "Riwayat",
     icon: Clock,
     available: true,
+    requiresToken: false,
   },
   {
     href: "/tracker",
@@ -43,6 +46,7 @@ const NAV_MAIN = [
     icon: TrendingUp,
     available: false,
     badge: "Segera",
+    requiresToken: false,
   },
 ];
 
@@ -83,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const allBottomNav = [
     ...NAV_MAIN,
-    { href: "/dashboard", label: "Akun", icon: LayoutDashboard, available: true },
+    { href: "/dashboard", label: "Akun", icon: LayoutDashboard, available: true, requiresToken: false },
   ];
 
   return (
@@ -141,6 +145,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             }
 
+            const noToken = item.requiresToken && tokenBalance !== null && tokenBalance === 0;
+
+            if (noToken) {
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => setShowTokenModal(true)}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-slate-400 hover:bg-orange-50/60 hover:text-orange-400 w-full text-left opacity-60"
+                >
+                  <Icon size={17} className="flex-shrink-0" />
+                  <span className="text-[13px] font-bold flex-1 truncate">{item.label}</span>
+                  <Zap size={11} className="text-orange-400 flex-shrink-0" />
+                </button>
+              );
+            }
+
             return (
               <Link
                 key={item.href}
@@ -153,7 +173,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={17} className="flex-shrink-0" />
                 <span className="text-[13px] font-bold flex-1 truncate">{item.label}</span>
-                {isActive && <ChevronRight size={13} className="text-orange-300 flex-shrink-0" />}
+                {item.requiresToken && (
+                  <Zap size={11} className={`flex-shrink-0 ${isActive ? "text-orange-400" : "text-orange-300"}`} />
+                )}
+                {isActive && !item.requiresToken && <ChevronRight size={13} className="text-orange-300 flex-shrink-0" />}
+                {isActive && item.requiresToken && <ChevronRight size={13} className="text-orange-300 flex-shrink-0 ml-0.5" />}
               </Link>
             );
           })}
@@ -237,6 +261,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Icon size={19} className="text-slate-400" />
                 <span className="text-[8px] font-bold text-slate-400">{item.label}</span>
               </div>
+            );
+          }
+
+          const noToken = item.requiresToken && tokenBalance !== null && tokenBalance === 0;
+
+          if (noToken) {
+            return (
+              <button
+                key={item.href}
+                onClick={() => setShowTokenModal(true)}
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all text-slate-300 relative"
+              >
+                <Icon size={19} />
+                <span className="text-[8px] font-bold">{item.label}</span>
+                <Zap size={8} className="absolute top-1.5 right-[calc(50%-14px)] text-orange-400" />
+              </button>
             );
           }
 
