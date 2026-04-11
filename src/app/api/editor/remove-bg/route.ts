@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { fal } from "@fal-ai/client";
 
 export const maxDuration = 60;
 
@@ -12,29 +11,66 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   rawKey && !rawKey.includes("_here") ? rawKey : "placeholder_key";
 
-// Configure fal client with API key (server-side only)
-fal.config({ credentials: process.env.FAL_KEY ?? "" });
+// Hugging Face Inference API — free tier, no credit card required.
+// briaai/RMBG-1.4 is SOTA background removal (non-commercial license).
+// To swap to a permissive model later, change HF_REMOVE_BG_MODEL env var.
+const HF_API_TOKEN = process.env.HF_API_TOKEN ?? "";
+const HF_REMOVE_BG_MODEL = process.env.HF_REMOVE_BG_MODEL ?? "briaai/RMBG-1.4";
+const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_REMOVE_BG_MODEL}`;
 
-// Model name — configurable via env var so future swaps need no code deploy
-const FAL_REMOVE_BG_MODEL = process.env.FAL_REMOVE_BG_MODEL ?? "fal-ai/nano-banana/edit";
+// HF cold-start retry: model may need to load on first call (returns 503).
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 4000;
 
-// Output type for fal-ai/nano-banana/edit
-interface FalImageFile {
-  url: string;
-  content_type?: string;
-  file_name?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-interface NanoBananaOutput {
-  images: FalImageFile[];
-  description: string;
+async function callHfRemoveBg(imageBlob: Blob): Promise<Buffer> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const res = await fetch(HF_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${HF_API_TOKEN}`,
+        "Content-Type": "application/octet-stream",
+        Accept: "image/png",
+      },
+      body: imageBlob,
+    });
+
+    // 503 = model is loading (cold start). Wait and retry.
+    if (res.status === 503) {
+      let estimatedTime = RETRY_BASE_DELAY_MS / 1000;
+      try {
+        const errJson = (await res.json()) as { estimated_time?: number };
+        if (typeof errJson.estimated_time === "number") {
+          estimatedTime = errJson.estimated_time;
+        }
+      } catch {
+        // ignore parse error, fall back to default delay
+      }
+      const waitMs = Math.min(Math.ceil(estimatedTime * 1000) + 500, 20000);
+      console.log(
+        `[remove-bg] HF model loading, retry ${attempt + 1}/${MAX_RETRIES} in ${waitMs}ms`
+      );
+      await sleep(waitMs);
+      continue;
+    }
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`HF API error ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  throw new Error("Model masih loading setelah beberapa percobaan. Coba lagi sebentar.");
 }
 
 // POST /api/editor/remove-bg
-// Removes product background using fal.ai nano-banana/edit model.
+// Removes product background using Hugging Face Inference API (free tier).
 // Returns transparent PNG as base64 data URI.
 // No token cost — background removal is a free utility feature.
 export async function POST(request: NextRequest) {
@@ -58,6 +94,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!HF_API_TOKEN) {
+    console.error("[remove-bg] HF_API_TOKEN is not set");
+    return NextResponse.json(
+      { error: "Server belum dikonfigurasi (HF_API_TOKEN). Hubungi admin." },
+      { status: 500 }
+    );
+  }
+
   // ── Parse body ────────────────────────────────────────────────────────────
   let body: { base64Image?: string };
   try {
@@ -72,35 +116,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // ── Upload image to fal.ai storage to get a URL ───────────────────────
-    const buffer = Buffer.from(base64Image, "base64");
-    const blob = new Blob([buffer], { type: "image/png" });
-    const uploadedUrl = await fal.storage.upload(blob as File);
-
-    // ── Call nano-banana/edit to remove the background ───────────────────
-    const result = await fal.subscribe(FAL_REMOVE_BG_MODEL, {
-      input: {
-        prompt:
-          "Remove the background completely. Keep only the main product with clean edges. Make the background fully transparent.",
-        image_urls: [uploadedUrl],
-        output_format: "png",
-      },
-    });
-
-    const output = result.data as NanoBananaOutput;
-    const resultImageUrl = output.images?.[0]?.url;
-
-    if (!resultImageUrl) {
-      throw new Error("No image returned from fal.ai");
-    }
-
-    // ── Fetch result image and convert to base64 ──────────────────────────
-    const imgRes = await fetch(resultImageUrl);
-    if (!imgRes.ok) {
-      throw new Error(`Failed to fetch result image: ${imgRes.status}`);
-    }
-    const imgBuffer = await imgRes.arrayBuffer();
-    const base64Result = Buffer.from(imgBuffer).toString("base64");
+    const imageBytes = Buffer.from(base64Image, "base64");
+    const imageBlob = new Blob([new Uint8Array(imageBytes)], { type: "application/octet-stream" });
+    const resultBuffer = await callHfRemoveBg(imageBlob);
+    const base64Result = resultBuffer.toString("base64");
 
     return NextResponse.json({
       imageUrl: `data:image/png;base64,${base64Result}`,
