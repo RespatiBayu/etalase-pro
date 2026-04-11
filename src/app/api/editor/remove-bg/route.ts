@@ -11,12 +11,12 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   rawKey && !rawKey.includes("_here") ? rawKey : "placeholder_key";
 
-// Hugging Face Inference API — free tier, no credit card required.
+// Hugging Face Inference Providers (new router) — free tier via hf-inference.
 // briaai/RMBG-1.4 is SOTA background removal (non-commercial license).
-// To swap to a permissive model later, change HF_REMOVE_BG_MODEL env var.
+// Old api-inference.huggingface.co was deprecated → use router.huggingface.co.
 const HF_API_TOKEN = process.env.HF_API_TOKEN ?? "";
 const HF_REMOVE_BG_MODEL = process.env.HF_REMOVE_BG_MODEL ?? "briaai/RMBG-1.4";
-const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_REMOVE_BG_MODEL}`;
+const HF_API_URL = `https://router.huggingface.co/hf-inference/models/${HF_REMOVE_BG_MODEL}`;
 
 // HF cold-start retry: model may need to load on first call (returns 503).
 const MAX_RETRIES = 3;
