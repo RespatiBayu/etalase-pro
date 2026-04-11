@@ -376,9 +376,9 @@ export function EditorShell() {
       setRemoveStatus(
         errMsg.includes("Timeout") || errMsg.includes("lama")
           ? "Terlalu lama. Coba refresh halaman."
-          : errMsg.length > 50
-          ? "Gagal memproses. Coba upload gambar lain."
-          : errMsg || "Gagal. Coba lagi."
+          : errMsg.length > 0
+          ? errMsg.slice(0, 200)
+          : "Gagal. Coba lagi."
       );
     } finally {
       setIsRemoving(false);

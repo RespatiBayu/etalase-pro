@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
   if (!HF_API_TOKEN) {
     console.error("[remove-bg] HF_API_TOKEN is not set");
     return NextResponse.json(
-      { error: "Server belum dikonfigurasi (HF_API_TOKEN). Hubungi admin." },
+      { error: "HF_API_TOKEN belum di-set di Vercel." },
       { status: 500 }
     );
   }
