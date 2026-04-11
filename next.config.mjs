@@ -17,18 +17,20 @@ const nextConfig = {
       "onnxruntime-node",
       "sharp",
     ],
-    // Ensure Vercel includes the model files + native binaries in the
-    // serverless function bundle (otherwise file tracing misses them).
+    // Include only the linux/x64 onnxruntime native binary
+    // (model files are fetched from imgly CDN at runtime via publicPath).
     outputFileTracingIncludes: {
       "/api/editor/remove-bg": [
-        "./node_modules/@imgly/background-removal-node/dist/**/*",
         "./node_modules/onnxruntime-node/bin/napi-v3/linux/x64/**/*",
       ],
     },
-    // Strip onnxruntime-node binaries for darwin / win32 / linux-arm64
-    // so we stay under Vercel's 250MB serverless function size limit.
+    // Strip everything heavy that we don't actually need on Vercel:
+    // - imgly model files (content-hashed names, fetched from CDN at runtime)
+    // - onnxruntime-node binaries for non-linux/x64 platforms
     outputFileTracingExcludes: {
       "/api/editor/remove-bg": [
+        // Each model file is named as a 64-char SHA-256 hex hash without extension
+        "./node_modules/@imgly/background-removal-node/dist/[0-9a-f]*",
         "./node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*",
         "./node_modules/onnxruntime-node/bin/napi-v3/win32/**/*",
         "./node_modules/onnxruntime-node/bin/napi-v3/linux/arm64/**/*",

@@ -18,13 +18,17 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   rawKey && !rawKey.includes("_here") ? rawKey : "placeholder_key";
 
-// Use the smaller medium model for faster cold-start on serverless.
-// Options: "small" (~40MB, fastest), "medium" (~80MB, balanced), "large" (~180MB, best).
+// Fetch model files from imgly CDN at runtime instead of bundling them
+// (saves ~127MB from the serverless function bundle, well under Vercel's
+// 250MB limit). Files are cached in /tmp after first download.
+// Pin to installed package version (1.4.5) so paths match.
 const IMGLY_CONFIG: Config = {
-  model: "medium",
+  model: "small", // ~40MB, fastest cold start
+  publicPath:
+    "https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/",
   output: {
     format: "image/png",
-    quality: 0.95,
+    quality: 0.9,
   },
   debug: false,
 };
