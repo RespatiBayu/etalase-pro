@@ -1034,7 +1034,7 @@ export function EditorShell() {
                   }`}>{removeStatus}</p>
                 )}
                 <p className="text-[8px] text-slate-400 text-center">
-                  Diproses di server AI. Hasil edge presisi & gratis.
+                  Diproses di server. Gratis & tanpa batas. Permintaan pertama bisa ~30 detik.
                 </p>
               </Section>
 

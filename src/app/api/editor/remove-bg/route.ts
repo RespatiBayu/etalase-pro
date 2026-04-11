@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { removeBackground, type Config } from "@imgly/background-removal-node";
 
+// Server-side bg removal via @imgly/background-removal-node.
+// Runs ONNX model in onnxruntime-node — no external API, no API key, free.
+// First call downloads ~85MB model into OS tmp dir, subsequent calls instant
+// (within same Vercel function instance lifetime).
+
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,68 +18,20 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   rawKey && !rawKey.includes("_here") ? rawKey : "placeholder_key";
 
-// Hugging Face Inference Providers (new router) — free tier via hf-inference.
-// briaai/RMBG-1.4 is SOTA background removal (non-commercial license).
-// Old api-inference.huggingface.co was deprecated → use router.huggingface.co.
-const HF_API_TOKEN = process.env.HF_API_TOKEN ?? "";
-const HF_REMOVE_BG_MODEL = process.env.HF_REMOVE_BG_MODEL ?? "briaai/RMBG-1.4";
-const HF_API_URL = `https://router.huggingface.co/hf-inference/models/${HF_REMOVE_BG_MODEL}`;
-
-// HF cold-start retry: model may need to load on first call (returns 503).
-const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 4000;
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function callHfRemoveBg(imageBlob: Blob): Promise<Buffer> {
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const res = await fetch(HF_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${HF_API_TOKEN}`,
-        "Content-Type": "application/octet-stream",
-        Accept: "image/png",
-      },
-      body: imageBlob,
-    });
-
-    // 503 = model is loading (cold start). Wait and retry.
-    if (res.status === 503) {
-      let estimatedTime = RETRY_BASE_DELAY_MS / 1000;
-      try {
-        const errJson = (await res.json()) as { estimated_time?: number };
-        if (typeof errJson.estimated_time === "number") {
-          estimatedTime = errJson.estimated_time;
-        }
-      } catch {
-        // ignore parse error, fall back to default delay
-      }
-      const waitMs = Math.min(Math.ceil(estimatedTime * 1000) + 500, 20000);
-      console.log(
-        `[remove-bg] HF model loading, retry ${attempt + 1}/${MAX_RETRIES} in ${waitMs}ms`
-      );
-      await sleep(waitMs);
-      continue;
-    }
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(`HF API error ${res.status}: ${errText.slice(0, 200)}`);
-    }
-
-    const arrayBuffer = await res.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  }
-
-  throw new Error("Model masih loading setelah beberapa percobaan. Coba lagi sebentar.");
-}
+// Use the smaller medium model for faster cold-start on serverless.
+// Options: "small" (~40MB, fastest), "medium" (~80MB, balanced), "large" (~180MB, best).
+const IMGLY_CONFIG: Config = {
+  model: "medium",
+  output: {
+    format: "image/png",
+    quality: 0.95,
+  },
+  debug: false,
+};
 
 // POST /api/editor/remove-bg
-// Removes product background using Hugging Face Inference API (free tier).
-// Returns transparent PNG as base64 data URI.
-// No token cost — background removal is a free utility feature.
+// Body: { base64Image: string } — raw base64 (no data: prefix)
+// Returns: { imageUrl: "data:image/png;base64,..." }
 export async function POST(request: NextRequest) {
   // ── Auth check ────────────────────────────────────────────────────────────
   const cookieStore = cookies();
@@ -94,14 +53,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!HF_API_TOKEN) {
-    console.error("[remove-bg] HF_API_TOKEN is not set");
-    return NextResponse.json(
-      { error: "HF_API_TOKEN belum di-set di Vercel." },
-      { status: 500 }
-    );
-  }
-
   // ── Parse body ────────────────────────────────────────────────────────────
   let body: { base64Image?: string };
   try {
@@ -116,9 +67,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const imageBytes = Buffer.from(base64Image, "base64");
-    const imageBlob = new Blob([new Uint8Array(imageBytes)], { type: "application/octet-stream" });
-    const resultBuffer = await callHfRemoveBg(imageBlob);
+    // Convert base64 → Blob (input format @imgly accepts directly)
+    const buffer = Buffer.from(base64Image, "base64");
+    const inputBlob = new Blob([new Uint8Array(buffer)], { type: "image/png" });
+
+    // Run ONNX inference. First call downloads model (~80MB) to /tmp.
+    const resultBlob = await removeBackground(inputBlob, IMGLY_CONFIG);
+
+    // Convert result Blob → base64 data URI
+    const resultBuffer = Buffer.from(await resultBlob.arrayBuffer());
     const base64Result = resultBuffer.toString("base64");
 
     return NextResponse.json({
