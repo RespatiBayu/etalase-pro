@@ -291,54 +291,53 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── AI Background Removal — server-side via fal.ai ────────────────────────
-  // Uses /api/editor/remove-bg which calls fal.ai nano-banana/edit model.
-  // Previously tried client-side @imgly/background-removal but onnxruntime-web
-  // ships dynamic require() calls that webpack cannot bundle correctly,
-  // causing "e.replace is not a function" errors at runtime.
+  // ── AI Background Removal — browser-side via @imgly/background-removal ────
+  // Runs ONNX model entirely in the user's browser (onnxruntime-web).
+  // First call downloads ~80MB model from imgly CDN, then cached in browser
+  // (CacheStorage). Free forever, no API key, no Vercel function size impact.
+  // The next.config.mjs aliases onnxruntime-web to its prebuilt browser bundle
+  // so webpack doesn't accidentally load the node export and break with
+  // "e.replace is not a function".
 
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    console.log("[remove-bg] Starting server-side removal...");
+    console.log("[remove-bg] Starting browser-side removal...");
 
-    // Extract base64 portion from data URL
-    const base64Image = sourceDataUrl.split(",")[1];
-    if (!base64Image) {
-      throw new Error("Gambar tidak valid. Coba upload ulang.");
-    }
+    // Lazy import — keeps onnxruntime-web (~5MB) out of the initial editor bundle
+    // and only downloads when the user actually clicks "Hapus Background".
+    const { removeBackground } = await import("@imgly/background-removal");
 
-    // 120s timeout safety
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    // Convert data URL → Blob (input format @imgly accepts directly)
+    const res = await fetch(sourceDataUrl);
+    const inputBlob = await res.blob();
 
-    try {
-      const response = await fetch("/api/editor/remove-bg", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64Image }),
-        signal: controller.signal,
-      });
+    setRemoveStatus("Menyiapkan model AI...");
 
-      clearTimeout(timeoutId);
+    const resultBlob = await removeBackground(inputBlob, {
+      // isnet_quint8 = ~40MB quantized, fastest cold start; quality is fine for products.
+      // (other options: "isnet" full ~170MB, "isnet_fp16" ~85MB)
+      model: "isnet_quint8",
+      output: { format: "image/png", quality: 0.9 },
+      progress: (key, current, total) => {
+        // key examples: "fetch:/onnx/model.onnx", "compute:resize", ...
+        if (key.startsWith("fetch:")) {
+          const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+          setRemoveStatus(`Download model... ${pct}%`);
+        } else if (key.startsWith("compute:")) {
+          setRemoveStatus("Menghapus background...");
+        }
+      },
+    });
 
-      if (!response.ok) {
-        const errData = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errData.error || `Gagal memproses (${response.status})`);
-      }
+    // Blob → data URL
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Gagal membaca hasil."));
+      reader.readAsDataURL(resultBlob);
+    });
 
-      const data = (await response.json()) as { imageUrl?: string };
-      if (!data.imageUrl) {
-        throw new Error("Tidak ada hasil dari server.");
-      }
-
-      console.log("[remove-bg] Server returned image, size:", data.imageUrl.length);
-      return data.imageUrl;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err instanceof Error && err.name === "AbortError") {
-        throw new Error("Timeout: Proses terlalu lama (>120s). Coba lagi.");
-      }
-      throw err;
-    }
+    console.log("[remove-bg] Done, size:", dataUrl.length);
+    return dataUrl;
   }, []);
 
   const handleRemoveBg = useCallback(async () => {
@@ -350,7 +349,7 @@ export function EditorShell() {
     setIsRemoving(true);
     setRemoveElapsed(0);
     removeStartTimeRef.current = Date.now();
-    setRemoveStatus("Memproses di server AI...");
+    setRemoveStatus("Memuat model AI...");
     console.log("[remove-bg] Starting removal process");
     
     // Update elapsed time every 500ms
@@ -1034,7 +1033,7 @@ export function EditorShell() {
                   }`}>{removeStatus}</p>
                 )}
                 <p className="text-[8px] text-slate-400 text-center">
-                  Diproses di server. Gratis & tanpa batas. Permintaan pertama bisa ~30 detik.
+                  Diproses di browser. Gratis selamanya. Pertama kali download model ~40MB.
                 </p>
               </Section>
 

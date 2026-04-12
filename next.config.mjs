@@ -1,56 +1,33 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import { createRequire } from "module";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Next 14 syntax — Next 15 moved this to top-level `serverExternalPackages`.
-  // @imgly/background-removal-node + onnxruntime-node ship native binaries
-  // and ONNX models that webpack can't bundle. Mark as external so they're
-  // require()'d at runtime from node_modules instead.
+  // @imgly/background-removal ships both browser & node builds. We use it
+  // client-side only (background removal in the editor), so mark its node
+  // companions as externals on the server side to skip Node-target bundling.
   experimental: {
     serverComponentsExternalPackages: [
-      "@imgly/background-removal-node",
+      "@imgly/background-removal",
       "onnxruntime-node",
       "sharp",
     ],
-    // Include only the linux/x64 onnxruntime native binary
-    // (model files are fetched from imgly CDN at runtime via publicPath).
-    outputFileTracingIncludes: {
-      "/api/editor/remove-bg": [
-        "./node_modules/onnxruntime-node/bin/napi-v3/linux/x64/**/*",
-      ],
-    },
-    // Strip everything heavy that we don't actually need on Vercel:
-    // - imgly model files (content-hashed names, fetched from CDN at runtime)
-    // - onnxruntime-node binaries for non-linux/x64 platforms
-    outputFileTracingExcludes: {
-      "/api/editor/remove-bg": [
-        // Each model file is named as a 64-char SHA-256 hex hash without extension
-        "./node_modules/@imgly/background-removal-node/dist/[0-9a-f]*",
-        "./node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*",
-        "./node_modules/onnxruntime-node/bin/napi-v3/win32/**/*",
-        "./node_modules/onnxruntime-node/bin/napi-v3/linux/arm64/**/*",
-      ],
-    },
   },
   webpack: (config, { isServer, webpack }) => {
-    // Fix: onnxruntime-web ships .mjs ES modules with dynamic require()
-    // that webpack can't statically analyse. Tell webpack to ignore them.
+    // Allow webpack to handle .mjs files from node_modules with bare imports.
     config.module.rules.push({
-      test: /\.mjs$/,
+      test: /\.m?js$/,
       include: /node_modules/,
       type: "javascript/auto",
       resolve: { fullySpecified: false },
     });
 
     if (!isServer) {
-      // Fix: onnxruntime-web package.json has a "node" exports condition that
-      // Next.js webpack sometimes picks (loading ort.node.min.mjs in browser →
-      // "e.replace is not a function"). Force the browser bundle explicitly.
+      // Browser side: force onnxruntime-web to its prebuilt browser bundle.
+      // The package's "node" exports condition can otherwise be picked, which
+      // loads ort.node.min.mjs in the browser → "e.replace is not a function".
       config.resolve.alias = {
         ...config.resolve.alias,
         "onnxruntime-web": path.resolve(
@@ -73,18 +50,15 @@ const nextConfig = {
         )
       );
     }
-    // Server: onnxruntime-node + @imgly are handled via serverExternalPackages
-    // above, so we don't alias them here. Letting webpack ignore them as
-    // external means Node will require() them at runtime.
 
-    // Suppress "Critical dependency: require function" warnings from onnxruntime-web
-    // (internal dynamic requires inside pre-built ort bundles — harmless in browser)
+    // Suppress noisy "Critical dependency: require function" warnings from
+    // pre-built ort bundles — harmless dynamic requires inside the bundle.
     config.ignoreWarnings = [
       ...(config.ignoreWarnings ?? []),
       /Critical dependency.*onnxruntime/,
       (w) => {
         const msg = w.message ?? "";
-        const mod = (w.module?.identifier?.() ?? w.module?.resource ?? "");
+        const mod = w.module?.identifier?.() ?? w.module?.resource ?? "";
         return (
           msg.includes("Critical dependency") &&
           (mod.includes("onnxruntime") || mod.includes("ort."))
