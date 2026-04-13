@@ -292,19 +292,28 @@ export function EditorShell() {
   }, []);
 
   // ── AI Background Removal — browser-side via @imgly/background-removal ────
-  // Runs ONNX model entirely in the user's browser (onnxruntime-web).
-  // First call downloads ~80MB model from imgly CDN, then cached in browser
-  // (CacheStorage). Free forever, no API key, no Vercel function size impact.
-  // The next.config.mjs aliases onnxruntime-web to its prebuilt browser bundle
-  // so webpack doesn't accidentally load the node export and break with
-  // "e.replace is not a function".
+  // Loads @imgly/background-removal from esm.sh CDN at runtime using native
+  // browser import(), completely bypassing webpack bundling. This avoids the
+  // infamous "e.replace is not a function" error caused by webpack mangling
+  // onnxruntime-web's internal WASM path strings into module objects.
+  //
+  // First call: downloads library from CDN + ~40MB ONNX model from imgly CDN.
+  // Subsequent calls: instant (browser caches both JS and model).
+  // Free forever, no API key, no Vercel function size impact.
 
   const runAiRemoval = useCallback(async (sourceDataUrl: string): Promise<string> => {
-    console.log("[remove-bg] Starting browser-side removal...");
+    console.log("[remove-bg] Starting browser-side removal (CDN)...");
 
-    // Lazy import — keeps onnxruntime-web (~5MB) out of the initial editor bundle
-    // and only downloads when the user actually clicks "Hapus Background".
-    const { removeBackground } = await import("@imgly/background-removal");
+    setRemoveStatus("Memuat library AI...");
+
+    // ★ KEY TRICK: use new Function('return import(...)') to perform a NATIVE
+    // browser dynamic import from a CDN URL. Webpack cannot statically analyse
+    // the string inside new Function, so it leaves the import alone — the
+    // browser fetches the module directly from esm.sh at runtime.
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    const { removeBackground } = (await new Function(
+      'return import("https://esm.sh/@imgly/background-removal@1.7.0")'
+    )()) as { removeBackground: (blob: Blob, cfg?: Record<string, unknown>) => Promise<Blob> };
 
     // Convert data URL → Blob (input format @imgly accepts directly)
     const res = await fetch(sourceDataUrl);
@@ -313,12 +322,9 @@ export function EditorShell() {
     setRemoveStatus("Menyiapkan model AI...");
 
     const resultBlob = await removeBackground(inputBlob, {
-      // isnet_quint8 = ~40MB quantized, fastest cold start; quality is fine for products.
-      // (other options: "isnet" full ~170MB, "isnet_fp16" ~85MB)
       model: "isnet_quint8",
       output: { format: "image/png", quality: 0.9 },
-      progress: (key, current, total) => {
-        // key examples: "fetch:/onnx/model.onnx", "compute:resize", ...
+      progress: (key: string, current: number, total: number) => {
         if (key.startsWith("fetch:")) {
           const pct = total > 0 ? Math.round((current / total) * 100) : 0;
           setRemoveStatus(`Download model... ${pct}%`);
