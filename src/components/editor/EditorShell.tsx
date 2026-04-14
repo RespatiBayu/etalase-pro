@@ -4,7 +4,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import {
   Upload, Trash2, Loader2, Wand2, Palette, Type,
   Download, RotateCcw, Zap, Check, Image as ImageIcon,
-  AlertCircle, ChevronDown, ChevronRight, AlignLeft,
+  ChevronDown, ChevronRight, AlignLeft,
   AlignCenter, AlignRight, Bold, Italic, X, Plus,
   Layers, Tag, Save, FolderOpen, Clock, Pencil,
 } from "lucide-react";
@@ -34,14 +34,117 @@ const BG_COLORS = [
   "#FCE7F3", "#EDE9FE",
 ];
 
-const LATAR_AI_STYLES = [
-  { id: "suasana",     name: "Suasana",           emoji: "🌅", prompt: "Beautiful atmospheric lifestyle environment, warm ambient lighting, bokeh background, professional product photography setting." },
-  { id: "meja_dapur",  name: "Meja Dapur",         emoji: "🍽️", prompt: "Clean kitchen countertop, natural wood textures, soft morning light, cooking lifestyle aesthetic, neutral tones." },
-  { id: "interior",    name: "Interior",           emoji: "🛋️", prompt: "Modern interior design background, cozy home setting, natural daylight, elegant furniture context, warm neutral palette." },
-  { id: "tekstur",     name: "Tekstur",            emoji: "🪨", prompt: "Premium textured background, stone marble or concrete surface, sophisticated minimalist material, studio lighting." },
-  { id: "event",       name: "Event",              emoji: "🎉", prompt: "Festive event atmosphere, bokeh party lights, celebratory backdrop, elegant decoration, warm glowing ambiance." },
-  { id: "ornamen",     name: "Aksesoris/Ornamen",  emoji: "✨", prompt: "Elegant decorative ornaments and accessories as background props, luxury arrangement, gold or silver accents, premium showcase." },
-];
+// ─── Template Backgrounds — free photos from Pexels & Unsplash ───────────────
+// 10 curated backgrounds per product category.
+// Thumbnails are 600×600 crops; applied full-res to canvas.
+
+type TemplateBg = { id: string; label: string; thumb: string; full: string };
+
+const px = (id: number, label: string): TemplateBg => ({
+  id: `px-${id}`,
+  label,
+  thumb: `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop`,
+  full:  `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=1080&h=1080&fit=crop`,
+});
+
+const TEMPLATE_BACKGROUNDS: Record<string, TemplateBg[]> = {
+  fashion: [
+    px(1536619,  "Studio Abu Muda"),
+    px(3621343,  "Krem Lembut"),
+    px(5709661,  "Putih Bersih"),
+    px(2253879,  "Pink Pastel"),
+    px(1324195,  "Hitam Elegan"),
+    px(1148820,  "Mawar Kering"),
+    px(3819517,  "Kain Krem"),
+    px(4327208,  "Gradient Peach"),
+    px(5386752,  "Marble Putih"),
+    px(3094218,  "Marble Halus"),
+  ],
+  accessories: [
+    px(3094218,  "Marble Putih"),
+    px(3094228,  "Marble Gelap"),
+    px(271557,   "Glitter Emas"),
+    px(1616403,  "Velvet Gelap"),
+    px(1323550,  "Marble Klasik"),
+    px(248152,   "Hitam Premium"),
+    px(3756680,  "Abu Tekstur"),
+    px(1068523,  "Gelap Bokeh"),
+    px(373290,   "Emas Mewah"),
+    px(2228613,  "Krem Sutra"),
+  ],
+  home: [
+    px(1571459,  "Skandinavia"),
+    px(1350789,  "Interior Hangat"),
+    px(4792269,  "Modern Living"),
+    px(3773082,  "Kayu Alami"),
+    px(1457842,  "Cahaya Pagi"),
+    px(1125137,  "Dapur Estetik"),
+    px(380768,   "Ruang Putih"),
+    px(2082087,  "Boho Cozy"),
+    px(1866149,  "Nordic Simple"),
+    px(3932172,  "Kontemporer"),
+  ],
+  tech: [
+    px(270408,   "Gelap Abstrak"),
+    px(3183186,  "Tech Dark"),
+    px(2148217,  "Biru Gelap"),
+    px(1714208,  "Neon Circuit"),
+    px(1181675,  "Meja Minimal"),
+    px(325111,   "Hitam Sleek"),
+    px(2832581,  "Cyber Dark"),
+    px(1194713,  "Studio Gelap"),
+    px(3756742,  "Gaming Dark"),
+    px(1540319,  "Purple Neon"),
+  ],
+  beauty: [
+    px(2113566,  "Peach Lembut"),
+    px(2253879,  "Pink Aesthetic"),
+    px(3866792,  "Putih Bersih"),
+    px(1279107,  "Bunga Estetik"),
+    px(3632168,  "Ungu Pastel"),
+    px(3762940,  "Minimal Clean"),
+    px(2836486,  "Alami Lembut"),
+    px(3944405,  "Krem Premium"),
+    px(5824521,  "Rose Gold"),
+    px(3819517,  "Sutra Krem"),
+  ],
+  food: [
+    px(1640775,  "Kayu Rustic"),
+    px(1640765,  "Batu Gelap"),
+    px(2890387,  "Marble Putih"),
+    px(3297615,  "Beton Minimal"),
+    px(1640769,  "Kayu Terang"),
+    px(1779487,  "Linen Alami"),
+    px(139303,   "Papan Kayu"),
+    px(3616836,  "Hitam Matte"),
+    px(1640777,  "Abu Slate"),
+    px(5718062,  "Marble Food"),
+  ],
+  automotive: [
+    px(1402787,  "Aspal Tekstur"),
+    px(892522,   "Jalan Raya"),
+    px(2916512,  "Showroom Putih"),
+    px(3849881,  "Gudang Industrial"),
+    px(3729557,  "Lantai Grid"),
+    px(2676096,  "Gelap Dramatis"),
+    px(1592384,  "Beton Gelap"),
+    px(844297,   "Malam Kota"),
+    px(3846205,  "Garasi Gelap"),
+    px(2547358,  "Metalik Surface"),
+  ],
+  sports: [
+    px(841130,   "Outdoor Alam"),
+    px(1547248,  "Gym Gelap"),
+    px(2261485,  "Lapangan Sport"),
+    px(3076517,  "Outdoor Aktif"),
+    px(2294354,  "Track Atletik"),
+    px(2827392,  "Gym Minimal"),
+    px(3621413,  "Gunung Dramatis"),
+    px(1398929,  "Forest Trail"),
+    px(2827397,  "Fitness Dark"),
+    px(1547251,  "Training Blur"),
+  ],
+};
 
 const FONT_OPTIONS = [
   "Inter", "Poppins", "Montserrat", "Roboto",
@@ -170,13 +273,12 @@ export function EditorShell() {
   const [batchBgTab, setBatchBgTab]               = useState<"hapus" | "warna">("hapus");
 
   // ── Background state ───────────────────────────────────────────────────────
-  const [bgSubTab, setBgSubTab]   = useState<"ai" | "template" | "warna" | "upload">("warna");
-  const [bgColor, setBgColor]     = useState("#FFFFFF");
-  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
-  const [selectedAiStyle, setSelectedAiStyle]     = useState(LATAR_AI_STYLES[0].id);
-  const [isGeneratingAI, setIsGeneratingAI]       = useState(false);
-  const [aiError, setAiError]                     = useState("");
-  const [tokenBalance, setTokenBalance]           = useState<number | null>(null);
+  const [bgSubTab, setBgSubTab]         = useState<"template" | "warna" | "upload">("warna");
+  const [bgColor, setBgColor]           = useState("#FFFFFF");
+  const [bgImageUrl, setBgImageUrl]     = useState<string | null>(null);
+  const [bgTemplateCategory, setBgTemplateCategory] = useState<string>("fashion");
+  const [bgTemplateLoading, setBgTemplateLoading]   = useState<string | null>(null);
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
 
   // ── Teks state ─────────────────────────────────────────────────────────────
   const [headlineText, setHeadlineText]     = useState("");
@@ -411,50 +513,29 @@ export function EditorShell() {
     reader.readAsDataURL(file);
   }, []);
 
-  // stylePrompt = undefined → AI auto-analyze mode; string → template mode
-  const handleLatarAI = useCallback(async (stylePrompt?: string) => {
-    const imageDataUrl = processedDataUrl ?? uploadedDataUrl;
-    if (!imageDataUrl) return;
-    setIsGeneratingAI(true);
-    setAiError("");
+  // Apply a template background image from Pexels — fetch as data URL first
+  // to handle any cross-origin restrictions; falls back to direct URL.
+  const applyBgTemplate = useCallback(async (bg: TemplateBg) => {
+    setBgTemplateLoading(bg.id);
     try {
-      const res  = await fetch(imageDataUrl);
+      const res = await fetch(bg.full);
       const blob = await res.blob();
-      const base64 = await new Promise<string>((resolve) => {
-        const r = new FileReader();
-        r.onloadend = () => resolve((r.result as string).split(",")[1]);
-        r.readAsDataURL(blob);
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject();
+        reader.readAsDataURL(blob);
       });
-      const response = await fetch("/api/editor/latar-ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // stylePrompt omitted when undefined → server uses auto-analyze mode
-        body: JSON.stringify({ base64Image: base64, stylePrompt, ratio }),
-      });
-      if (response.status === 402) {
-        setAiError("Token tidak cukup. Beli token untuk menggunakan Latar AI.");
-        return;
-      }
-      if (!response.ok) {
-        const d = await response.json() as { error?: string };
-        setAiError(d.error ?? "Gagal generate.");
-        return;
-      }
-      const data = await response.json() as { imageUrl?: string };
-      if (data.imageUrl) {
-        setBgImageUrl(data.imageUrl);
-        fabricRef.current?.setBackgroundImage(data.imageUrl);
-        fetch("/api/tokens/balance")
-          .then((r) => r.json())
-          .then((d: { tokens?: number }) => setTokenBalance(d.tokens ?? 0))
-          .catch(() => {});
-      }
+      setBgImageUrl(dataUrl);
+      fabricRef.current?.setBackgroundImage(dataUrl);
     } catch {
-      setAiError("Terjadi kesalahan. Coba lagi.");
+      // Fallback: use URL directly
+      setBgImageUrl(bg.full);
+      fabricRef.current?.setBackgroundImage(bg.full);
     } finally {
-      setIsGeneratingAI(false);
+      setBgTemplateLoading(null);
     }
-  }, [processedDataUrl, uploadedDataUrl, ratio]);
+  }, []);
 
   // ── Teks ───────────────────────────────────────────────────────────────────
   const applyHeadline = useCallback((text: string, style: TextStyle) => {
@@ -811,7 +892,6 @@ export function EditorShell() {
     setTaglineText("");
     setLogoDataUrl(null);
     setFiturList(["", "", ""]);
-    setAiError("");
     setCurrentProjectId(null);
     setProjectName("Proyek Editor");
     setSaveStatus("idle");
@@ -1047,14 +1127,14 @@ export function EditorShell() {
               <Section title="Ubah Latar" icon={<Palette size={13} />}>
                 {/* Sub-tabs */}
                 <div className="flex bg-orange-50 p-0.5 rounded-xl gap-0.5 mb-2">
-                  {(["warna", "ai", "template", "upload"] as const).map((t) => (
+                  {(["warna", "template", "upload"] as const).map((t) => (
                     <button key={t} onClick={() => setBgSubTab(t)}
                       className={`flex-1 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
                         bgSubTab === t
                           ? "bg-white text-orange-600 shadow-sm border border-orange-100"
                           : "text-slate-400 hover:text-orange-400"
                       }`}>
-                      {t === "warna" ? "Warna" : t === "ai" ? "AI✦" : t === "template" ? "Template" : "Upload"}
+                      {t === "warna" ? "Warna" : t === "template" ? "Template" : "Upload"}
                     </button>
                   ))}
                 </div>
@@ -1084,104 +1164,59 @@ export function EditorShell() {
                   </div>
                 )}
 
-                {/* AI — auto-analyze & generate */}
-                {bgSubTab === "ai" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-100">
-                      <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
-                        <Zap size={10} className="text-orange-400" /> Latar AI
-                      </span>
-                      <span className="text-[9px] text-orange-400 font-bold">
-                        1 token / generate {tokenBalance !== null ? `· sisa ${tokenBalance}` : ""}
-                      </span>
-                    </div>
-                    {/* Description */}
-                    <div className="bg-orange-50/60 border border-orange-100 rounded-xl p-3 space-y-1">
-                      <p className="text-[9px] font-black text-orange-800 leading-tight">✦ AI Analisa Otomatis</p>
-                      <p className="text-[8px] text-slate-500 leading-relaxed">
-                        AI akan menganalisa produkmu secara otomatis dan memilih latar yang paling cocok tanpa perlu pilih gaya manual.
-                      </p>
-                    </div>
-                    {aiError && (
-                      <div className="flex items-start gap-1.5 bg-rose-50 border border-rose-100 rounded-xl p-2">
-                        <AlertCircle size={11} className="text-rose-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-[8px] text-rose-600 font-bold leading-tight">{aiError}</p>
-                      </div>
-                    )}
-                    {(aiError.includes("Token") || (tokenBalance !== null && tokenBalance === 0)) && (
-                      <a href="/dashboard"
-                        className="flex items-center justify-center gap-1 w-full py-2 rounded-xl bg-orange-400 text-white text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">
-                        <Zap size={10} /> Beli Token
-                      </a>
-                    )}
-                    {/* Auto-generate: no stylePrompt passed → server auto-analyzes */}
-                    <button onClick={() => handleLatarAI()} disabled={isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)}
-                      className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                        isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)
-                          ? "bg-orange-100 text-orange-300 cursor-not-allowed"
-                          : "bg-orange-400 text-white shadow-lg shadow-orange-100 hover:bg-orange-500 active:scale-95"
-                      }`}>
-                      {isGeneratingAI
-                        ? <><Loader2 size={11} className="animate-spin" /> Menganalisa...</>
-                        : <><Wand2 size={11} /> Generate Otomatis</>
-                      }
-                    </button>
-                  </div>
-                )}
-
-                {/* Template — 6 style cards (Suasana, Meja Dapur, dll.) */}
+                {/* Template — free backgrounds from Pexels, 10 per category */}
                 {bgSubTab === "template" && (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-100">
-                      <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
-                        <Layers size={10} className="text-orange-400" /> Pilih Gaya
-                      </span>
-                      <span className="text-[9px] text-orange-400 font-bold">
-                        1 token / generate {tokenBalance !== null ? `· sisa ${tokenBalance}` : ""}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {LATAR_AI_STYLES.map((s) => (
-                        <button key={s.id} onClick={() => setSelectedAiStyle(s.id)}
-                          className={`p-2 rounded-xl border-2 text-left transition-all ${
-                            selectedAiStyle === s.id
-                              ? "border-orange-400 bg-orange-50 shadow-md shadow-orange-100"
-                              : "border-orange-100 bg-white hover:border-orange-200"
+                    {/* Category pills */}
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { key: "fashion",     label: "Fashion"    },
+                        { key: "accessories", label: "Aksesoris"  },
+                        { key: "home",        label: "Rumah"      },
+                        { key: "tech",        label: "Elektronik" },
+                        { key: "beauty",      label: "Kecantikan" },
+                        { key: "food",        label: "Makanan"    },
+                        { key: "automotive",  label: "Otomotif"   },
+                        { key: "sports",      label: "Olahraga"   },
+                      ].map((c) => (
+                        <button key={c.key} onClick={() => setBgTemplateCategory(c.key)}
+                          className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider transition-all border ${
+                            bgTemplateCategory === c.key
+                              ? "bg-orange-400 text-white border-orange-400"
+                              : "bg-white text-slate-500 border-orange-100 hover:border-orange-300"
                           }`}>
-                          <span className="text-base block">{s.emoji}</span>
-                          <p className="text-[8px] font-black text-orange-900 leading-tight mt-0.5">{s.name}</p>
+                          {c.label}
                         </button>
                       ))}
                     </div>
-                    {aiError && (
-                      <div className="flex items-start gap-1.5 bg-rose-50 border border-rose-100 rounded-xl p-2">
-                        <AlertCircle size={11} className="text-rose-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-[8px] text-rose-600 font-bold leading-tight">{aiError}</p>
-                      </div>
-                    )}
-                    {(aiError.includes("Token") || (tokenBalance !== null && tokenBalance === 0)) && (
-                      <a href="/dashboard"
-                        className="flex items-center justify-center gap-1 w-full py-2 rounded-xl bg-orange-400 text-white text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all">
-                        <Zap size={10} /> Beli Token
-                      </a>
-                    )}
-                    {/* Template mode: pass selected style's prompt */}
-                    <button
-                      onClick={() => {
-                        const style = LATAR_AI_STYLES.find((s) => s.id === selectedAiStyle);
-                        if (style) handleLatarAI(style.prompt);
-                      }}
-                      disabled={isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)}
-                      className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                        isGeneratingAI || !uploadedDataUrl || (tokenBalance !== null && tokenBalance === 0)
-                          ? "bg-orange-100 text-orange-300 cursor-not-allowed"
-                          : "bg-orange-400 text-white shadow-lg shadow-orange-100 hover:bg-orange-500 active:scale-95"
-                      }`}>
-                      {isGeneratingAI
-                        ? <><Loader2 size={11} className="animate-spin" /> Generating...</>
-                        : <><Wand2 size={11} /> Generate Template</>
-                      }
-                    </button>
+
+                    {/* Image grid */}
+                    <div className="grid grid-cols-2 gap-1.5 max-h-[380px] overflow-y-auto pr-0.5">
+                      {(TEMPLATE_BACKGROUNDS[bgTemplateCategory] ?? []).map((bg) => (
+                        <button key={bg.id} onClick={() => applyBgTemplate(bg)}
+                          disabled={bgTemplateLoading === bg.id}
+                          className="relative aspect-square rounded-xl overflow-hidden border-2 border-transparent hover:border-orange-400 transition-all group focus:outline-none focus:border-orange-400">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={bg.thumb}
+                            alt={bg.label}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => { (e.currentTarget.parentElement as HTMLButtonElement).style.display = "none"; }}
+                          />
+                          {/* Loading overlay */}
+                          {bgTemplateLoading === bg.id && (
+                            <div className="absolute inset-0 bg-orange-900/30 flex items-center justify-center">
+                              <Loader2 size={18} className="animate-spin text-white" />
+                            </div>
+                          )}
+                          {/* Label on hover */}
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent py-1.5 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <p className="text-[7px] font-black text-white uppercase tracking-widest leading-none truncate">{bg.label}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[7px] text-slate-400 text-center">Foto gratis dari Pexels · Klik untuk pakai</p>
                   </div>
                 )}
 
