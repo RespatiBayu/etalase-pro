@@ -34,9 +34,9 @@ const BG_COLORS = [
   "#FCE7F3", "#EDE9FE",
 ];
 
-// ─── Template Backgrounds — free photos from Pexels & Unsplash ───────────────
+// ─── Template Backgrounds — environment photos from Pexels (no objects) ───────
+// All images are SETTINGS / ENVIRONMENTS without prominent products.
 // 10 curated backgrounds per product category.
-// Thumbnails are 600×600 crops; applied full-res to canvas.
 
 type TemplateBg = { id: string; label: string; thumb: string; full: string };
 
@@ -48,101 +48,109 @@ const px = (id: number, label: string): TemplateBg => ({
 });
 
 const TEMPLATE_BACKGROUNDS: Record<string, TemplateBg[]> = {
+  // ── Fashion: studio backdrop, dinding, tirai, kain polos ─────────────────
   fashion: [
-    px(1536619,  "Studio Abu Muda"),
-    px(3621343,  "Krem Lembut"),
-    px(5709661,  "Putih Bersih"),
-    px(2253879,  "Pink Pastel"),
-    px(1324195,  "Hitam Elegan"),
-    px(1148820,  "Mawar Kering"),
-    px(3819517,  "Kain Krem"),
-    px(4327208,  "Gradient Peach"),
-    px(5386752,  "Marble Putih"),
-    px(3094218,  "Marble Halus"),
+    px(3621343,  "Backdrop Abu"),        // plain gray studio backdrop
+    px(1103970,  "Dinding Putih"),        // white studio wall
+    px(1536619,  "Studio Minimal"),       // clean minimal studio
+    px(2912236,  "Tirai Putih"),          // white curtain background
+    px(1148820,  "Kain Krem"),            // cream/beige fabric surface
+    px(3819517,  "Sutra Krem"),           // silk/cream texture
+    px(1324195,  "Backdrop Hitam"),       // black studio backdrop
+    px(2253879,  "Pink Pastel"),          // pink pastel wall
+    px(1639729,  "Sand Pastel"),          // sand/beige clean
+    px(5709661,  "Putih Bersih"),         // clean white background
   ],
+  // ── Aksesoris & Koleksi: permukaan mewah, velvet, marble ─────────────────
   accessories: [
-    px(3094218,  "Marble Putih"),
-    px(3094228,  "Marble Gelap"),
-    px(271557,   "Glitter Emas"),
-    px(1616403,  "Velvet Gelap"),
-    px(1323550,  "Marble Klasik"),
-    px(248152,   "Hitam Premium"),
-    px(3756680,  "Abu Tekstur"),
-    px(1068523,  "Gelap Bokeh"),
-    px(373290,   "Emas Mewah"),
-    px(2228613,  "Krem Sutra"),
+    px(1323550,  "Marble Klasik"),        // white marble surface
+    px(3094218,  "Marble Halus"),         // smooth marble
+    px(1616403,  "Velvet Gelap"),         // dark velvet fabric
+    px(271557,   "Glitter Emas"),         // gold glitter surface
+    px(373290,   "Permukaan Emas"),       // gold textured surface
+    px(248152,   "Hitam Premium"),        // premium black surface
+    px(2228613,  "Sutra Krem"),           // cream silk fabric
+    px(1037992,  "Kayu Premium"),         // premium dark wood
+    px(1068523,  "Bokeh Gelap"),          // dark bokeh background
+    px(3756680,  "Abu Tekstur"),          // gray textured surface
   ],
+  // ── Produk Rumah & Dekorasi: ruang tamu, meja, rak, dapur ────────────────
   home: [
-    px(1571459,  "Skandinavia"),
-    px(1350789,  "Interior Hangat"),
-    px(4792269,  "Modern Living"),
-    px(3773082,  "Kayu Alami"),
-    px(1457842,  "Cahaya Pagi"),
-    px(1125137,  "Dapur Estetik"),
-    px(380768,   "Ruang Putih"),
-    px(2082087,  "Boho Cozy"),
-    px(1866149,  "Nordic Simple"),
-    px(3932172,  "Kontemporer"),
+    px(1571459,  "Ruang Skandinavia"),    // empty Scandinavian living room
+    px(4792269,  "Ruang Tamu Modern"),    // modern living room setting
+    px(1350789,  "Interior Hangat"),      // warm home interior
+    px(3773082,  "Meja Kayu Alami"),      // natural wood dining table
+    px(1457842,  "Cahaya Jendela"),       // natural window light interior
+    px(1125137,  "Dapur Estetik"),        // aesthetic kitchen counter
+    px(380768,   "Ruang Putih Bersih"),   // clean white room
+    px(2082087,  "Pojok Cozy"),           // cozy home corner
+    px(1866149,  "Meja Nordic"),          // Nordic style table setting
+    px(3932172,  "Rak Display"),          // display shelf/shelving unit
   ],
+  // ── Elektronik & Gadget: meja kerja, ruang dark, neon ────────────────────
   tech: [
-    px(270408,   "Gelap Abstrak"),
-    px(3183186,  "Tech Dark"),
-    px(2148217,  "Biru Gelap"),
-    px(1714208,  "Neon Circuit"),
-    px(1181675,  "Meja Minimal"),
-    px(325111,   "Hitam Sleek"),
-    px(2832581,  "Cyber Dark"),
-    px(1194713,  "Studio Gelap"),
-    px(3756742,  "Gaming Dark"),
-    px(1540319,  "Purple Neon"),
+    px(1181675,  "Meja Kerja Putih"),     // clean white work desk (empty)
+    px(3184290,  "Setup Minimal"),        // minimal desk setup empty
+    px(270408,   "Backdrop Gelap"),       // dark abstract backdrop
+    px(2148217,  "Studio Biru Gelap"),    // dark blue studio
+    px(325111,   "Meja Hitam"),           // black minimal desk
+    px(3183186,  "Ruang Tech Gelap"),     // dark tech room
+    px(1714208,  "Neon Backdrop"),        // neon ambiance
+    px(3756742,  "Gaming Room Dark"),     // dark gaming room
+    px(2832581,  "Cyber Gelap"),          // cyber dark environment
+    px(1540319,  "Ungu Neon"),            // purple neon lit room
   ],
+  // ── Kecantikan & Kesehatan: meja rias, kamar mandi, spa ──────────────────
   beauty: [
-    px(2113566,  "Peach Lembut"),
-    px(2253879,  "Pink Aesthetic"),
-    px(3866792,  "Putih Bersih"),
-    px(1279107,  "Bunga Estetik"),
-    px(3632168,  "Ungu Pastel"),
-    px(3762940,  "Minimal Clean"),
-    px(2836486,  "Alami Lembut"),
-    px(3944405,  "Krem Premium"),
-    px(5824521,  "Rose Gold"),
-    px(3819517,  "Sutra Krem"),
+    px(3866792,  "Counter Putih Bersih"), // clean white vanity counter
+    px(3094218,  "Marble Counter"),       // marble bathroom counter
+    px(2802238,  "Suasana Spa"),          // spa-like setting
+    px(1988935,  "Kamar Mandi Putih"),    // clean white bathroom
+    px(3632168,  "Ungu Pastel"),          // lavender/purple pastel
+    px(2253879,  "Pink Aesthetic"),       // pink aesthetic space
+    px(2113566,  "Peach Lembut"),         // soft peach backdrop
+    px(1279107,  "Bunga Kering"),         // dried floral minimal setting
+    px(2836486,  "Alami Daun"),           // natural/botanical
+    px(3762940,  "Putih Minimal"),        // white minimal clean
   ],
+  // ── Makanan & Minuman: meja dapur, meja makan, kafe, restoran ────────────
   food: [
-    px(1640775,  "Kayu Rustic"),
-    px(1640765,  "Batu Gelap"),
-    px(2890387,  "Marble Putih"),
-    px(3297615,  "Beton Minimal"),
-    px(1640769,  "Kayu Terang"),
-    px(1779487,  "Linen Alami"),
-    px(139303,   "Papan Kayu"),
-    px(3616836,  "Hitam Matte"),
-    px(1640777,  "Abu Slate"),
-    px(5718062,  "Marble Food"),
+    px(1640775,  "Meja Kayu Rustic"),     // rustic wooden kitchen table
+    px(1640769,  "Meja Kayu Terang"),     // light wooden dining table
+    px(2890387,  "Counter Marble"),       // marble kitchen counter (empty)
+    px(3297615,  "Permukaan Beton"),      // concrete/stone kitchen surface
+    px(1640777,  "Permukaan Slate"),      // dark slate surface
+    px(1640765,  "Batu Gelap"),           // dark stone counter
+    px(1779487,  "Meja Linen"),           // natural linen table
+    px(139303,   "Papan Kayu Rustic"),    // rustic wood planks
+    px(3616836,  "Meja Restoran Gelap"),  // dark restaurant table setting
+    px(5718062,  "Dapur Marble Putih"),   // white marble kitchen surface
   ],
+  // ── Otomotif: bengkel, showroom, garasi, aspal, indoor floor ─────────────
   automotive: [
-    px(1402787,  "Aspal Tekstur"),
-    px(892522,   "Jalan Raya"),
-    px(2916512,  "Showroom Putih"),
-    px(3849881,  "Gudang Industrial"),
-    px(3729557,  "Lantai Grid"),
-    px(2676096,  "Gelap Dramatis"),
-    px(1592384,  "Beton Gelap"),
-    px(844297,   "Malam Kota"),
-    px(3846205,  "Garasi Gelap"),
-    px(2547358,  "Metalik Surface"),
+    px(2916512,  "Showroom Putih"),       // white car showroom floor
+    px(3849881,  "Gudang Industrial"),    // industrial warehouse interior
+    px(3729557,  "Lantai Epoxy Grid"),    // epoxy grid workshop floor
+    px(3846205,  "Interior Garasi"),      // dark garage interior
+    px(1592384,  "Lantai Beton Gelap"),   // dark concrete workshop floor
+    px(1402787,  "Aspal Jalanan"),        // road/asphalt surface
+    px(2676096,  "Studio Gelap Dramatis"),// dramatic dark studio
+    px(2547358,  "Permukaan Metalik"),    // metallic industrial surface
+    px(844297,   "Malam Perkotaan"),      // night city background (blurred)
+    px(892522,   "Jalan Mulus"),          // clean road/highway
   ],
+  // ── Olahraga & Outdoor: gym, lapangan, track, alam terbuka ───────────────
   sports: [
-    px(841130,   "Outdoor Alam"),
-    px(1547248,  "Gym Gelap"),
-    px(2261485,  "Lapangan Sport"),
-    px(3076517,  "Outdoor Aktif"),
-    px(2294354,  "Track Atletik"),
-    px(2827392,  "Gym Minimal"),
-    px(3621413,  "Gunung Dramatis"),
-    px(1398929,  "Forest Trail"),
-    px(2827397,  "Fitness Dark"),
-    px(1547251,  "Training Blur"),
+    px(1547248,  "Interior Gym"),         // gym interior (empty)
+    px(2827392,  "Gym Minimal Terang"),   // bright minimal gym setting
+    px(2261485,  "Lapangan Indoor"),      // indoor sports court
+    px(2294354,  "Track Lari"),           // running track / athletics
+    px(841130,   "Trail Outdoor"),        // outdoor nature trail
+    px(3076517,  "Lapangan Outdoor"),     // outdoor sports field
+    px(3621413,  "Pegunungan"),           // mountain outdoor backdrop
+    px(1398929,  "Jalur Hutan"),          // forest trail path
+    px(2827397,  "Studio Fitness Gelap"), // dark fitness studio
+    px(1547251,  "Blur Training"),        // training room blurred
   ],
 };
 
@@ -1170,14 +1178,14 @@ export function EditorShell() {
                     {/* Category pills */}
                     <div className="flex flex-wrap gap-1">
                       {[
-                        { key: "fashion",     label: "Fashion"    },
-                        { key: "accessories", label: "Aksesoris"  },
-                        { key: "home",        label: "Rumah"      },
-                        { key: "tech",        label: "Elektronik" },
-                        { key: "beauty",      label: "Kecantikan" },
-                        { key: "food",        label: "Makanan"    },
-                        { key: "automotive",  label: "Otomotif"   },
-                        { key: "sports",      label: "Olahraga"   },
+                        { key: "fashion",     label: "Fashion"           },
+                        { key: "accessories", label: "Aksesoris & Koleksi" },
+                        { key: "home",        label: "Rumah & Dekorasi"  },
+                        { key: "tech",        label: "Elektronik & Gadget" },
+                        { key: "beauty",      label: "Kecantikan & Kesehatan" },
+                        { key: "food",        label: "Makanan & Minuman" },
+                        { key: "automotive",  label: "Otomotif"          },
+                        { key: "sports",      label: "Olahraga & Outdoor" },
                       ].map((c) => (
                         <button key={c.key} onClick={() => setBgTemplateCategory(c.key)}
                           className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider transition-all border ${
